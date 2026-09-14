@@ -11,7 +11,14 @@ warnings.filterwarnings("ignore")
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_community.retrievers import BM25Retriever
-from sentence_transformers import CrossEncoder
+
+# Optional CrossEncoder import
+try:
+    from sentence_transformers import CrossEncoder
+    HAS_SENTENCE_TRANSFORMERS = True
+except ImportError:
+    CrossEncoder = None
+    HAS_SENTENCE_TRANSFORMERS = False
 
 
 class EnsembleRetriever(BaseRetriever):
