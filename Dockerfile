@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Install Python dependencies (without heavy CUDA deps)
+COPY requirements-docker.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements-docker.txt
 
 # Runtime stage
 FROM python:3.11-slim
@@ -21,10 +21,11 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /install /usr/local
 
 # Copy application code
 COPY src/ ./src/
@@ -37,11 +38,8 @@ RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
 USER app
 
-# Add local packages to PATH
-ENV PATH=/root/.local/bin:$PATH
-
 # Environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
 # Expose ports

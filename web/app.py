@@ -21,8 +21,7 @@ from finrag.explainability.models import ExplainableResult, VerificationStatus
 
 # Page config
 st.set_page_config(
-    page_title="FinRAG — Financial Intelligence & Evidence Trace",
-    page_icon="🏛️",
+    page_title="Financial Intelligence & Evidence Nexus Decisioning",
     layout="wide",
     initial_sidebar_state="expanded",
 )
