@@ -1,0 +1,46 @@
+{
+  "phase": 9,
+  "status": "frozen",
+  "timestamp": "2026-08-30",
+  "pipeline": {
+    "corpus_index": "phase6_tables_bge_base",
+    "embedding_model": "BAAI/bge-base-en-v1.5",
+    "vector_store": "FAISS",
+    "embedding_dim": 768
+  },
+  "retrieval": {
+    "hybrid_weights": {
+      "dense": 0.7,
+      "bm25": 0.3
+    },
+    "metadata_filtering": true,
+    "filter_over_fetch_k": 30,
+    "reranker": {
+      "model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "top_k": 5,
+      "candidate_k": 20
+    },
+    "final_k": 5
+  },
+  "generation": {
+    "prompt_version": "hardened_v1",
+    "prompt_file": "src/finrag/generation/__init__.py",
+    "refusal_phrase": "Insufficient evidence to answer this question.",
+    "output_format": "Answer:/Evidence:"
+  },
+  "llm": {
+    "provider": "ollama",
+    "model": "llama3.2",
+    "temperature": 0.1,
+    "rpm": 10,
+    "max_tokens": 4096
+  },
+  "evaluation": {
+    "date": "2026-08-30",
+    "eval_set": "eval/phase9_eval_set.json",
+    "retrieval_metrics": ["Hit@3", "Hit@5", "Hit@10", "MRR@5", "NDCG@5", "Recall@5", "Precision@5"],
+    "generation_metrics": ["correctness", "numeric_accuracy", "citation_correctness", "citation_completeness", "faithfulness", "answer_relevance", "correct_refusal_rate", "incorrect_refusal_rate", "hallucination_rate"],
+    "automated_evaluators": ["RAGAS", "DeepEval"],
+    "manual_review_percentage": 15
+  }
+}
