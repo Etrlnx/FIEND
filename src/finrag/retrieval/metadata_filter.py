@@ -153,17 +153,10 @@ def extract_metadata_filter(query: str) -> MetadataFilter:
     if re.search(r"\b10-q\b|\bquarterly\b|\bq[1-4]\b", query_lower):
         forms.append("10-Q")
 
-    # 3. Fiscal Years (2024, 2025, 2026, FY24, FY25, FY26)
-    year_matches = re.findall(r"\b(202[4-7])\b", query)
-    for ym in year_matches:
-        if ym not in years:
-            years.append(ym)
-
-    fy_matches = re.findall(r"\bfy\s*(20)?(2[4-7])\b", query_lower)
-    for _, yr in fy_matches:
-        full_yr = f"20{yr}"
-        if full_yr not in years:
-            years.append(full_yr)
+    # 3. Fiscal Years: not extracted. chunk metadata's fiscal_year field is
+    # always None (loader never populates it), so any fiscal_year filter
+    # matches zero documents. ponytail: filter on it once the loader is
+    # fixed to actually set fiscal_year on chunks.
 
     # 4. Item / Section
     for kw, item_val in SECTION_KEYWORDS.items():
@@ -221,12 +214,16 @@ class FilteredRetriever(BaseRetriever):
                 if len(filtered_docs) >= self.k:
                     break
 
-        # Fallback: if strict filter returned fewer than k, backfill with top unfiltered
-        if len(filtered_docs) < self.k:
+        # Backfill scoped to the same ticker/form constraint only (never
+        # cross-company): section/item tagging is inconsistent across chunks,
+        # so a strict item_number match can under-return even when plenty of
+        # on-topic, right-company evidence exists in the candidate pool.
+        if len(filtered_docs) < self.k and active_filter.tickers:
+            ticker_only = MetadataFilter(tickers=active_filter.tickers, forms=active_filter.forms)
             for doc in candidate_docs:
-                if doc not in filtered_docs:
+                if doc not in filtered_docs and ticker_only.matches(doc.metadata):
                     filtered_docs.append(doc)
                     if len(filtered_docs) >= self.k:
                         break
 
-        return filtered_docs[:self.k]
+        return filtered_docs
