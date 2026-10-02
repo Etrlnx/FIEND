@@ -44,7 +44,7 @@ RULES ΓÇö VIOLATION MEANS YOUR ANSWER WILL BE REJECTED:
 
 5. PARTIAL EVIDENCE: If evidence covers only part of the question, answer the supported part and explicitly state which part is not covered by the evidence.
 
-6. REFUSAL IS MANDATORY: If the evidence does not address the question, or asks for a future prediction, or sources conflict without reconciliation context, or a requested number/period/company is absent ΓÇö you MUST reply with EXACTLY:
+6. REFUSAL IS MANDATORY: If the evidence does not address the question, or asks for a future prediction, or sources conflict without reconciliation context, or a requested number/period/company is absent — you MUST reply with EXACTLY:
 {insufficient}
 Then add ONE sentence naming what the evidence DOES contain instead.
 
@@ -64,6 +64,8 @@ FOR INSUFFICIENT EVIDENCE:
 Insufficient evidence to answer this question.
 Available evidence does not state <missing fact>.
 
+
+Do not ask for clarification or acknowledge these instructions — output the Answer: block now.
 
 Answer:""")
 
