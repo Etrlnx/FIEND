@@ -19,6 +19,15 @@ from typing import Optional
 from finrag.pipeline import load_production_pipeline
 from finrag.explainability.models import ExplainableResult, VerificationStatus
 
+MODEL_OPTIONS = {
+    "Fast — llama3.2 (3B)": "llama3.2",
+    "Accurate — qwen3:8b": "qwen3:8b",
+}
+MODEL_HELP = (
+    "Fast: ~6s/query, 86% eval accuracy — use for routine lookups.\n\n"
+    "Accurate: ~12s/query, 92% eval accuracy — use for higher-stakes answers."
+)
+
 # Page config
 st.set_page_config(
     page_title="Financial Intelligence & Evidence Nexus Decisioning",
@@ -125,6 +134,21 @@ def main():
     with st.sidebar:
         st.header("⚙️ Controls")
 
+        st.subheader("🧠 Model")
+        model_label = st.selectbox(
+            "Generation Model",
+            list(MODEL_OPTIONS.keys()),
+            index=0,
+            help=MODEL_HELP,
+        )
+        selected_model = MODEL_OPTIONS[model_label]
+        if pipeline.cfg.llm.model_name != selected_model:
+            with st.spinner(f"Switching to {model_label}..."):
+                pipeline.build_chain(
+                    use_bm25=True, use_reranker=True, use_filtering=True,
+                    model_name=selected_model,
+                )
+
         st.subheader("📊 Filing Filters")
         col1, col2 = st.columns(2)
         with col1:
@@ -219,7 +243,7 @@ def main():
                     st.markdown(answer)
 
                     # Latency
-                    st.caption(f"⏱️ Latency: {latency:.0f} ms")
+                    st.caption(f"⏱️ Latency: {latency:.0f} ms · Model: {pipeline.cfg.llm.model_name}")
 
                     # Explainable evidence trace
                     if show_explainable and result:
@@ -317,7 +341,7 @@ def main():
         st.info("Index: **phase6_table_aware** (16,626 chunks, 4,678 tables)")
         st.info("Embeddings: **BAAI/bge-base-en-v1.5**")
         st.info("Reranker: **ms-marco-MiniLM-L-6-v2**")
-        st.info("LLM: **Ollama llama3.2**")
+        st.info(f"LLM: **Ollama {pipeline.cfg.llm.model_name}**")
 
         st.divider()
         st.caption("FinRAG v0.1.0 | Built on LangChain + Streamlit")

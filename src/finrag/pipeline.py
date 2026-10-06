@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Optional
 
 from langchain_core.documents import Document
@@ -101,7 +102,11 @@ class FinRAGPipeline:
         use_bm25: bool = True,
         use_reranker: bool = True,
         use_filtering: bool = True,
+        model_name: str | None = None,
     ):
+        """Build the retrieval+generation chain. Pass model_name to switch the
+        LLM (e.g. between a fast small model and a slower, more accurate one)
+        without reloading documents or the vector index."""
         if not self.vector_store:
             self.load_index()
 
@@ -118,7 +123,9 @@ class FinRAGPipeline:
             final_k=self.cfg.retrieval.k,
         )
 
-        llm = get_rate_limited_llm(self.cfg.llm)
+        llm_cfg = replace(self.cfg.llm, model_name=model_name) if model_name else self.cfg.llm
+        self.cfg = replace(self.cfg, llm=llm_cfg)
+        llm = get_rate_limited_llm(llm_cfg)
 
         self.retriever = retrieval
         self.chain = (
