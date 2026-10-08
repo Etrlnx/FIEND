@@ -213,7 +213,8 @@ def build_retrieval_pipeline(
             base_retriever=retriever,
             metadata_filter=metadata_filter,
             auto_extract_filter=True,
-            k=final_k,
+            # Reranker needs the full candidate pool (top-20 -> 5), not a pre-cut top-5
+            k=fetch_k if use_reranker else final_k,
             fetch_k=fetch_k,
         )
 

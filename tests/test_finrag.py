@@ -281,3 +281,33 @@ class TestProductionPipeline:
         pipeline = load_production_pipeline()
         assert pipeline is not None
         assert pipeline.vector_store is not None
+
+class TestRerankCandidatePool:
+    """Reranker must see the full fetch_k pool (top-20 -> 5), not a pre-cut top-5."""
+
+    def test_reranker_receives_fetch_k_candidates(self, monkeypatch):
+        import finrag.retrieval as r
+        from langchain_core.retrievers import BaseRetriever
+
+        docs = [Document(page_content=f"apple revenue chunk {i}", metadata={"ticker": "AAPL", "form": "10-K"}) for i in range(30)]
+
+        class Dense(BaseRetriever):
+            def _get_relevant_documents(self, query, **kw):
+                return docs[:20]
+
+        seen = {}
+
+        class Spy:
+            top_n = 5
+            def compress_documents(self, documents, query, **kw):
+                seen["n"] = len(documents)
+                return documents[: self.top_n]
+
+        monkeypatch.setattr(r, "get_reranker", lambda cfg=None: Spy())
+        retriever = r.build_retrieval_pipeline(
+            documents=docs, dense_retriever=Dense(), use_bm25=True,
+            use_reranker=True, use_filtering=True, fetch_k=20, final_k=5,
+        )
+        out = retriever.invoke("What was Apple revenue in the 10-K?")
+        assert seen["n"] == 20
+        assert len(out) == 5

@@ -291,8 +291,8 @@ def build_retriever(
 ):
     dense = get_dense_retriever(store, k=fetch_k)
     bm25 = get_bm25_retriever(chunks, k=fetch_k)
-    hybrid = get_ensemble_retriever(dense, bm25, bm25_weight=0.3, dense_weight=0.7)
-    filtered = get_filtered_retriever(hybrid, auto_extract_filter=True, k=fetch_k)
+    hybrid = get_ensemble_retriever(dense, bm25, bm25_weight=0.3, dense_weight=0.7, k=fetch_k)
+    filtered = get_filtered_retriever(hybrid, auto_extract_filter=True, k=fetch_k if use_reranker else final_k)
     if use_reranker:
         compressor = get_reranker()
         compressor.top_n = final_k

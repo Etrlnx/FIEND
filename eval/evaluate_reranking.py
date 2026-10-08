@@ -349,7 +349,7 @@ def main() -> None:
     def build(fetch: int, rerank_top_n: int | None):
         dense = get_dense_retriever(store, k=fetch)
         bm25 = get_bm25_retriever(chunks, k=fetch)
-        hybrid = get_ensemble_retriever(dense, bm25, bm25_weight=0.3, dense_weight=0.7)
+        hybrid = get_ensemble_retriever(dense, bm25, bm25_weight=0.3, dense_weight=0.7, k=fetch)
         filtered = get_filtered_retriever(hybrid, auto_extract_filter=True, k=fetch)
         if rerank_top_n is None:
             return filtered
