@@ -1,4 +1,4 @@
-# FinRAG Phase 5: Financial Metadata Filtering Benchmark Report
+# FIEND Phase 5: Financial Metadata Filtering Benchmark Report
 
 Quantitative evaluation of **Pre-Retrieval Metadata Filtering** versus **Unfiltered Baseline** on the 35-question financial benchmark across 15 companies and 30 SEC 10-K/10-Q filings.
 

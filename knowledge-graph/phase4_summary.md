@@ -1,4 +1,4 @@
-# FinRAG Phase 4: Hybrid Retrieval Benchmark Report
+# FIEND Phase 4: Hybrid Retrieval Benchmark Report
 
 Quantitative comparison of **Pure Dense**, **Pure BM25 (Sparse)**, and **Hybrid (Ensemble)** retrieval on the 35-question financial benchmark across 15 companies and 30 SEC 10-K/10-Q filings.
 

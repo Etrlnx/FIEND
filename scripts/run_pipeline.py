@@ -81,7 +81,7 @@ def cmd_test(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FinRAG - Financial Document Intelligence")
+    parser = argparse.ArgumentParser(description="FIEND - Financial Intelligence and Evidence Nexus Decisioning")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     build_parser = subparsers.add_parser("build", help="Build baseline vector store and index")

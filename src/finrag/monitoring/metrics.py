@@ -1,4 +1,4 @@
-"""Monitoring and metrics for FinRAG."""
+"""Monitoring and metrics for FIEND."""
 
 from __future__ import annotations
 

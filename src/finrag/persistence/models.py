@@ -1,4 +1,4 @@
-"""PostgreSQL models for FinRAG persistence layer."""
+"""PostgreSQL models for FIEND persistence layer."""
 
 from __future__ import annotations
 

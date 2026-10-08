@@ -253,7 +253,7 @@ def evaluate_retriever_config(
 
 def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "eval/results/phase4_summary.md"):
     md = []
-    md.append("# FinRAG Phase 4: Hybrid Retrieval Benchmark Report\n")
+    md.append("# FIEND Phase 4: Hybrid Retrieval Benchmark Report\n")
     md.append("Quantitative comparison of **Pure Dense**, **Pure BM25 (Sparse)**, and **Hybrid (Ensemble)** retrieval on the 35-question financial benchmark across 15 companies and 30 SEC 10-K/10-Q filings.\n")
     md.append("## 1. Overall Performance Summary\n")
     md.append("| Retrieval Configuration | BM25 / Dense Weight | Avg Latency (ms) | Hit@3 | Hit@5 | Hit@10 | MRR@5 | Recall@5 | Precision@5 |")
@@ -307,7 +307,7 @@ def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate Hybrid retrieval for FinRAG Phase 4.")
+    parser = argparse.ArgumentParser(description="Evaluate Hybrid retrieval for FIEND Phase 4.")
     args = parser.parse_args()
 
     eval_set = load_eval_dataset()

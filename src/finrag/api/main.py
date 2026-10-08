@@ -1,4 +1,4 @@
-"""FastAPI service for FinRAG - Financial Document Intelligence."""
+"""FastAPI service for FIEND - Financial Intelligence and Evidence Nexus Decisioning."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FinRAG API",
+    title="FIEND API",
     description="Financial Document Intelligence & Evidence-Grounded Retrieval System",
     version="0.1.0",
     lifespan=lifespan,

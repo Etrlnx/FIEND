@@ -1,4 +1,4 @@
-"""Query logging for FinRAG - persists queries, retrievals, and claim traces."""
+"""Query logging for FIEND - persists queries, retrievals, and claim traces."""
 
 from __future__ import annotations
 

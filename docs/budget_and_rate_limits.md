@@ -1,6 +1,6 @@
-# FinRAG: Budget, Rate Limits, and Safety Ceilings
+# FIEND: Budget, Rate Limits, and Safety Ceilings
 
-This document outlines API limits, request throttling, and cost estimation for the FinRAG pipeline across all experimental phases.
+This document outlines API limits, request throttling, and cost estimation for the FIEND pipeline across all experimental phases.
 
 ---
 
@@ -11,7 +11,7 @@ This document outlines API limits, request throttling, and cost estimation for t
   ```http
   User-Agent: SampleCompanyName AdminContact@sampledomain.com
   ```
-- **FinRAG Implementation**:
+- **FIEND Implementation**:
   - `src/data/edgar_downloader.py` enforces an automatic rate-limiting delay (`0.15s` - `0.2s` between requests) to stay comfortably below 10 req/sec.
   - SEC EDGAR data is free and legally public; all raw documents are stored in `data/raw/` so no repeated network calls are made during RAG experiments.
 

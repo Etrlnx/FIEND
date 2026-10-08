@@ -110,7 +110,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 80)
-    print("  FinRAG Phase 2 — Chunking Strategy Comparison")
+    print("  FIEND Phase 2 — Chunking Strategy Comparison")
     print("=" * 80)
 
     index_stats = {}

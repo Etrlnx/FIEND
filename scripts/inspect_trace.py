@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CLI tool for inspecting FinRAG explainable results."""
+"""CLI tool for inspecting FIEND explainable results."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def cmd_batch(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FinRAG Explainability Inspector")
+    parser = argparse.ArgumentParser(description="FIEND Explainability Inspector")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a single question")

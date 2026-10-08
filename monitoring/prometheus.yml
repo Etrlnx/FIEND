@@ -18,7 +18,7 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # FinRAG API metrics
+  # FIEND API metrics
   - job_name: 'finrag-api'
     metrics_path: '/metrics'
     static_configs:
@@ -27,7 +27,7 @@ scrape_configs:
           service: 'finrag-api'
           component: 'api'
 
-  # FinRAG Streamlit (if it exposes metrics)
+  # FIEND Streamlit (if it exposes metrics)
   - job_name: 'finrag-streamlit'
     metrics_path: '/metrics'
     static_configs:

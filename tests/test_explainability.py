@@ -1,4 +1,4 @@
-"""Unit tests for FinRAG explainability module."""
+"""Unit tests for FIEND explainability module."""
 
 import pytest
 from langchain_core.documents import Document

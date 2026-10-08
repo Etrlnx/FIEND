@@ -1,4 +1,4 @@
-"""Database connection and session management for FinRAG."""
+"""Database connection and session management for FIEND."""
 
 from __future__ import annotations
 

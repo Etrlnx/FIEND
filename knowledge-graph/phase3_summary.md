@@ -1,4 +1,4 @@
-# FinRAG Phase 3: Embedding Model Comparison Report
+# FIEND Phase 3: Embedding Model Comparison Report
 
 Quantitative evaluation of candidate embedding models on the 35-question financial benchmark across 15 companies and 30 SEC 10-K/10-Q filings.
 

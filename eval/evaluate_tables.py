@@ -254,7 +254,7 @@ def evaluate_retriever(
 
 def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "eval/results/phase6_summary.md"):
     md = []
-    md.append("# FinRAG Phase 6: Table-Aware Retrieval Comparison Report\n")
+    md.append("# FIEND Phase 6: Table-Aware Retrieval Comparison Report\n")
     md.append("Compares text-only retrieval vs table-aware retrieval (text + extracted Markdown tables) on 45-question financial benchmark (35 original + 10 table-dependent).\n")
 
     md.append("## 1. Overall Performance Summary\n")
@@ -333,7 +333,7 @@ def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate table-aware retrieval for FinRAG Phase 6.")
+    parser = argparse.ArgumentParser(description="Evaluate table-aware retrieval for FIEND Phase 6.")
     parser.add_argument("--rebuild", action="store_true", help="Force rebuild vector stores")
     args = parser.parse_args()
 

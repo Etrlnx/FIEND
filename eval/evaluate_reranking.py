@@ -226,7 +226,7 @@ def evaluate_config(
 
 def write_report(results: List[Dict[str, Any]], out_path: str) -> None:
     md = [
-        "# FinRAG Phase 7: Cross-Encoder Reranking Benchmark\n",
+        "# FIEND Phase 7: Cross-Encoder Reranking Benchmark\n",
         "Compares the Phase 5 filtered-hybrid baseline against cross-encoder "
         "reranking over a wider candidate pool. Model: "
         "`cross-encoder/ms-marco-MiniLM-L-6-v2` (local, no API key).\n",

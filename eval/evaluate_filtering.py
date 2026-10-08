@@ -217,7 +217,7 @@ def evaluate_pipeline_config(
 
 def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "eval/results/phase5_summary.md"):
     md = []
-    md.append("# FinRAG Phase 5: Financial Metadata Filtering Benchmark Report\n")
+    md.append("# FIEND Phase 5: Financial Metadata Filtering Benchmark Report\n")
     md.append("Quantitative evaluation of **Pre-Retrieval Metadata Filtering** versus **Unfiltered Baseline** on the 35-question financial benchmark across 15 companies and 30 SEC 10-K/10-Q filings.\n")
     md.append("## 1. Overall Performance Comparison (at k=5)\n")
     md.append("| Configuration | Filter Mode | Avg Latency (ms) | Cross-Company Contamination | Hit Rate@5 | MRR@5 | Recall@5 | Precision@5 |")

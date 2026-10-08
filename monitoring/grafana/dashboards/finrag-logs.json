@@ -1,6 +1,6 @@
 {
   "dashboard": {
-    "title": "FinRAG - Logs & Traces",
+    "title": "FIEND - Logs & Traces",
     "uid": "finrag-logs",
     "tags": ["finrag", "logs", "loki", "traces"],
     "timezone": "browser",

@@ -1,4 +1,4 @@
-"""Explainability data models for FinRAG."""
+"""Explainability data models for FIEND."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""FinRAG - Financial Document Intelligence & Evidence-Grounded Retrieval System."""
+"""FIEND - Financial Intelligence and Evidence Nexus Decisioning."""
 
 from __future__ import annotations
 

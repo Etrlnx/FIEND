@@ -1,4 +1,4 @@
-"""Unit tests for FinRAG components."""
+"""Unit tests for FIEND components."""
 
 import pytest
 from finrag.retrieval.metadata_filter import (

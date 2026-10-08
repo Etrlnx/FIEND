@@ -1,6 +1,6 @@
 {
   "dashboard": {
-    "title": "FinRAG - Financial Intelligence Dashboard",
+    "title": "FIEND - Financial Intelligence Dashboard",
     "uid": "finrag-overview",
     "tags": ["finrag", "financial", "rag", "production"],
     "timezone": "browser",

@@ -1,4 +1,4 @@
-"""FinRAG Monitoring - Prometheus metrics."""
+"""FIEND Monitoring - Prometheus metrics."""
 
 from __future__ import annotations
 

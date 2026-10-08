@@ -269,7 +269,7 @@ def evaluate_model(
 
 def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "eval/results/phase3_summary.md"):
     md = []
-    md.append("# FinRAG Phase 3: Embedding Model Comparison Report\n")
+    md.append("# FIEND Phase 3: Embedding Model Comparison Report\n")
     md.append("Quantitative evaluation of candidate embedding models on the 35-question financial benchmark across 15 companies and 30 SEC 10-K/10-Q filings.\n")
     md.append("## 1. Overall Performance Summary\n")
     md.append("| Embedding Model | Dims | Avg Latency (ms) | Hit@3 | Hit@5 | Hit@10 | MRR@5 | Recall@5 | Precision@5 |")
@@ -323,7 +323,7 @@ def generate_markdown_report(results: List[Dict[str, Any]], output_path: str = "
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate embedding models for FinRAG Phase 3.")
+    parser = argparse.ArgumentParser(description="Evaluate embedding models for FIEND Phase 3.")
     parser.add_argument("--rebuild", action="store_true", help="Force rebuild all vector stores")
     parser.add_argument("--models", nargs="+", default=["bge-small", "minilm-l6", "bge-base"], help="Models to evaluate")
     args = parser.parse_args()

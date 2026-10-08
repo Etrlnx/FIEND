@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: 'FinRAG Dashboards'
+  - name: 'FIEND Dashboards'
     orgId: 1
-    folder: 'FinRAG'
+    folder: 'FIEND'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

@@ -1,4 +1,4 @@
-# FinRAG Phase 8: Grounded Generation Evaluation Summary
+# FIEND Phase 8: Grounded Generation Evaluation Summary
 
 ## Executive Summary
 

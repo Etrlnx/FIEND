@@ -1,4 +1,4 @@
-# FinRAG Phase 7: Cross-Encoder Reranking Benchmark
+# FIEND Phase 7: Cross-Encoder Reranking Benchmark
 
 Compares the Phase 5 filtered-hybrid baseline against cross-encoder reranking over a wider candidate pool. Model: `cross-encoder/ms-marco-MiniLM-L-6-v2` (local, no API key).
 

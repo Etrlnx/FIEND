@@ -1,4 +1,4 @@
-# FinRAG Phase 6: Table-Aware Retrieval Comparison Report
+# FIEND Phase 6: Table-Aware Retrieval Comparison Report
 
 Compares text-only retrieval vs table-aware retrieval (text + extracted Markdown tables) on 45-question financial benchmark (35 original + 10 table-dependent).
 

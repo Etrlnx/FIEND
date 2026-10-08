@@ -1,4 +1,4 @@
-"""FinRAG Persistence Layer - PostgreSQL integration for query logging."""
+"""FIEND Persistence Layer - PostgreSQL integration for query logging."""
 
 from __future__ import annotations
 

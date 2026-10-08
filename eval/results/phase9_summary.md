@@ -1,4 +1,4 @@
-# FinRAG Phase 9: Final Evaluation & Failure Analysis Summary
+# FIEND Phase 9: Final Evaluation & Failure Analysis Summary
 
 ## Executive Summary
 
