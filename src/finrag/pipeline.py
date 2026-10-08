@@ -45,6 +45,10 @@ class FinRAGPipeline:
         self.chain = None
         self.documents: list[Document] = []
         self.retriever = None
+        # Loaded once, shared by the chain and the explainability scores
+        self.bm25 = None
+        self.reranker = None
+        self._generate = None  # prompt | llm, for answering from already-retrieved docs
 
     def load_documents(self, include_tables: bool = True) -> list[Document]:
         """Load all filings with table extraction enabled by default."""
@@ -72,31 +76,14 @@ class FinRAGPipeline:
         )
         return self.vector_store
 
-    def load_documents_for_bm25(self, include_tables: bool = True) -> list[Document]:
-        """Load documents for BM25 retriever (needed for hybrid retrieval)."""
-        print("Loading documents for BM25...")
-        docs = load_all_filings(
-            self.cfg.paths.manifest_path,
-            include_tables=include_tables,
-        )
-        self.documents = split_documents(docs, self.cfg.chunking)
+    def load_documents_from_index(self) -> list[Document]:
+        """BM25 corpus from the FAISS docstore: the exact chunks that were embedded,
+        in ~1s instead of re-parsing every filing (~70s). Rebuild the index after
+        changing chunking, or BM25 keeps searching the old chunks."""
+        if not self.vector_store:
+            self.load_index()
+        self.documents = list(self.vector_store.docstore._dict.values())
         return self.documents
-
-    def build_index(self, documents: list[Document] | None = None) -> FAISS:
-        docs = documents or self.documents or self.load_documents()
-        self.vector_store = build_vector_store(
-            docs,
-            self.cfg.paths.vector_store_dir,
-            get_embeddings(self.cfg.embedding),
-        )
-        return self.vector_store
-
-    def load_index(self) -> FAISS:
-        self.vector_store = load_vector_store(
-            self.cfg.paths.vector_store_dir,
-            get_embeddings(self.cfg.embedding),
-        )
-        return self.vector_store
 
     def build_chain(
         self,
@@ -113,6 +100,12 @@ class FinRAGPipeline:
 
         dense_retriever = get_retriever(self.vector_store, k=20)  # Fetch 20 for reranker
 
+        # Kept across build_chain calls (e.g. the web UI's model switch)
+        if use_bm25 and self.bm25 is None:
+            self.bm25 = get_bm25_retriever(self.documents, k=20)
+        if use_reranker and self.reranker is None:
+            self.reranker = get_reranker(self.cfg.retrieval)
+
         retrieval = build_retrieval_pipeline(
             documents=self.documents,
             dense_retriever=dense_retriever,
@@ -122,6 +115,8 @@ class FinRAGPipeline:
             use_filtering=use_filtering,
             fetch_k=20,  # Fetch 20 candidates for reranker
             final_k=self.cfg.retrieval.k,
+            bm25=self.bm25 if use_bm25 else None,
+            reranker=self.reranker if use_reranker else None,
         )
 
         llm_cfg = replace(self.cfg.llm, model_name=model_name) if model_name else self.cfg.llm
@@ -129,14 +124,16 @@ class FinRAGPipeline:
         llm = get_rate_limited_llm(llm_cfg)
 
         self.retriever = retrieval
+        self._generate = build_rag_prompt() | llm | StrOutputParser() | _as_text
         self.chain = (
             {"context": retrieval | format_docs, "question": RunnablePassthrough()}
-            | build_rag_prompt()
-            | llm
-            | StrOutputParser()
-            | _as_text
+            | self._generate
         )
         return self.chain
+
+    def _answer_from(self, question: str, docs: list[Document]) -> str:
+        """Generate from docs already retrieved, instead of re-running retrieval+rerank."""
+        return self._generate.invoke({"context": format_docs(docs), "question": question})
 
     def query(self, question: str) -> str:
         if not self.chain:
@@ -151,7 +148,7 @@ class FinRAGPipeline:
         docs = self.retriever.invoke(question)
         return {
             "question": question,
-            "answer": self.chain.invoke(question),
+            "answer": self._answer_from(question, docs),
             "evidence": [
                 {
                     "content": d.page_content,
@@ -173,26 +170,23 @@ class FinRAGPipeline:
         # Retrieve documents with scores
         docs = self.retriever.invoke(question)
         
-        # Extract multi-stage retrieval scores
-        from finrag.embeddings import get_embeddings
-        embeddings = get_embeddings(self.cfg.embedding)
-        dense_scores = extract_dense_scores(docs, question, embeddings, self.vector_store)
-        
-        # BM25 scores (need BM25 retriever)
-        from finrag.retrieval import get_bm25_retriever
-        bm25 = get_bm25_retriever(self.documents, k=len(docs) * 3)
-        bm25_ranks = extract_bm25_scores(docs, question, bm25)
-        
-        # Rerank scores
-        from finrag.retrieval import get_reranker
-        reranker = get_reranker(self.cfg.retrieval)
-        rerank_scores = extract_rerank_scores(docs, question, reranker.model)
-        
+        # Extract multi-stage retrieval scores, reusing the models loaded at startup
+        dense_scores = extract_dense_scores(docs, question, self.vector_store.embeddings, self.vector_store)
+
+        # Lazily built only for pipelines whose chain skipped BM25 / reranking
+        if self.bm25 is None and self.documents:
+            self.bm25 = get_bm25_retriever(self.documents, k=20)
+        bm25_ranks = extract_bm25_scores(docs, question, self.bm25) if self.bm25 else {}
+
+        if self.reranker is None:
+            self.reranker = get_reranker(self.cfg.retrieval)
+        rerank_scores = extract_rerank_scores(docs, question, self.reranker.model)
+
         # RRF ranks (approximate from final order)
         rrf_ranks = {_chunk_id(doc): i + 1 for i, doc in enumerate(docs)}
-        
-        # Generate answer
-        answer = self.chain.invoke(question)
+
+        # Generate answer from the docs above (no second retrieval pass)
+        answer = self._answer_from(question, docs)
         is_refusal = "Insufficient evidence to answer this question" in answer
         
         # Build explainable result
@@ -226,17 +220,7 @@ def build_production_pipeline() -> FinRAGPipeline:
 def load_production_pipeline() -> FinRAGPipeline:
     """Load the production pipeline from existing index."""
     pipeline = FinRAGPipeline()
-    pipeline.load_documents_for_bm25(include_tables=True)
-    pipeline.load_index()
-    pipeline.build_chain(use_bm25=True, use_reranker=True, use_filtering=True)
-    return pipeline
-
-
-def load_hybrid_pipeline() -> FinRAGPipeline:
-    """Load hybrid (Dense + BM25) pipeline with reranking (legacy helper)."""
-    pipeline = FinRAGPipeline()
-    pipeline.load_documents(include_tables=True)
-    pipeline.load_index()
+    pipeline.load_documents_from_index()  # loads the FAISS index + its chunks
     pipeline.build_chain(use_bm25=True, use_reranker=True, use_filtering=True)
     return pipeline
 

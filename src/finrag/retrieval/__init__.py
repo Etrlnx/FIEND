@@ -176,6 +176,8 @@ def build_retrieval_pipeline(
     metadata_filter: Optional[MetadataFilter] = None,
     fetch_k: Optional[int] = None,  # Number of candidates to fetch before filtering/reranking
     final_k: Optional[int] = None,  # Final number of results to return
+    bm25: Optional[BM25Retriever] = None,  # Prebuilt BM25 to reuse (skips re-indexing)
+    reranker: Optional[CrossEncoderReranker] = None,  # Preloaded reranker to reuse
 ) -> BaseRetriever:
     """Build complete retrieval pipeline with optional Hybrid, Filtering, and Reranking.
     
@@ -199,7 +201,7 @@ def build_retrieval_pipeline(
     retriever = dense_retriever
 
     if use_bm25:
-        bm25 = get_bm25_retriever(documents, k=fetch_k)
+        bm25 = bm25 or get_bm25_retriever(documents, k=fetch_k)
         w_bm25 = bm25_weight if bm25_weight is not None else cfg.bm25_weight
         w_dense = dense_weight if dense_weight is not None else cfg.dense_weight
         retriever = get_ensemble_retriever(
@@ -221,7 +223,7 @@ def build_retrieval_pipeline(
         )
 
     if use_reranker:
-        reranker = get_reranker(cfg)
+        reranker = reranker or get_reranker(cfg)
         reranker.top_n = final_k
         retriever = ContextualCompressionRetriever(
             base_compressor=reranker,
