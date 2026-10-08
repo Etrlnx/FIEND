@@ -4,14 +4,16 @@ Created as an enterprise-grade Retrieval-Augmented Generation (RAG) system engin
 
 ## Features
 
-- **SEC EDGAR Ingestion**: Downloads and parses 10-K/10-Q filings from SEC EDGAR
+- **SEC EDGAR Corpus**: Parses 30 10-K/10-Q filings (15 companies, latest 10-K + 10-Q each) listed in `data/manifest.json`
 - **Table-Aware Processing**: Extracts and preserves financial tables as Markdown with context headers
 - **Section-Aware Chunking**: Respects SEC filing structure (Part I/II, Item 1A, Item 7, etc.)
-- **Hybrid Retrieval**: Combines dense (BGE-base) and sparse (BM25) retrieval with RRF
-- **Metadata Filtering**: Pre-retrieval filtering by ticker, form, fiscal year, section
+- **Hybrid Retrieval**: Combines dense (BGE-base) and sparse (BM25) retrieval with weighted RRF
+- **Metadata Filtering**: Query-derived filtering by ticker, form and section (fiscal-year filtering is currently disabled — chunks carry no fiscal year)
 - **Cross-Encoder Reranking**: ms-marco-MiniLM-L-6-v2 reranker (top-20 → top-5)
 - **Grounded Generation**: Hardened prompt with mandatory citations and refusal handling
-- **Pluggable LLM Providers**: Gemini, Anthropic, OpenAI, Ollama (local, zero-quota)
+- **Pluggable LLM Providers**: Gemini, Anthropic, OpenAI, Ollama (local: llama3.2 3B or qwen3:8b, switchable in the UI)
+- **Explainability**: Per-claim citation verification with dense / BM25 / RRF / rerank scores per evidence chunk
+- **Full Stack**: Streamlit UI, FastAPI service, Postgres query logging, Prometheus + Loki + Grafana
 
 ---
 
@@ -40,33 +42,31 @@ flowchart TD
 
 ### 2. Retrieval Pipeline
 
-The multi-stage retrieval pipeline that narrows thousands of chunks down to the top-5 most relevant passages for any given query.
+The multi-stage retrieval pipeline that narrows 17,188 chunks down to the top-5 most relevant passages for any given query. BM25, the reranker and the embedding model are loaded once at startup and reused for every query.
 
 ```mermaid
 flowchart TD
-    Q([User Query]) --> MF
+    Q([User Query]) --> DENSE
+    Q --> BM25
 
-    subgraph FILTER["Pre-Retrieval Metadata Filter"]
-        MF["MetadataFilter\nextract_metadata_filter\nticker / form / year / section"]
-    end
-
-    MF --> DENSE
-    MF --> BM25
-
-    subgraph HYBRID["Hybrid Retrieval — Ensemble RRF"]
-        DENSE["Dense Vector Search\nFAISS · BGE-base-en-v1.5\nweight = 0.7"]
-        BM25["Sparse Keyword Search\nBM25Retriever\nweight = 0.3"]
-        RRF["Reciprocal Rank Fusion\nRRF score = sum w / k + rank\ntop-20 candidates"]
+    subgraph HYBRID["Hybrid Retrieval — Weighted RRF"]
+        DENSE["Dense Vector Search\nFAISS · BGE-base-en-v1.5\nk = 20 · weight = 0.7"]
+        BM25["Sparse Keyword Search\nBM25Retriever\nk = 20 · weight = 0.3"]
+        RRF["Reciprocal Rank Fusion\nscore = sum w / 60 + rank\nchunk identity = filing + full text\ntop-20 candidates"]
         DENSE --> RRF
         BM25 --> RRF
     end
 
     RRF --> FR
 
+    subgraph FILTER["Metadata Filter"]
+        FR["FilteredRetriever\nticker / form / section from the query\nkeeps up to 20 matching candidates"]
+    end
+
+    FR --> CE
+
     subgraph RERANK["Cross-Encoder Reranking"]
-        FR["FilteredRetriever\nover-fetch 6x"]
         CE["CrossEncoder\nms-marco-MiniLM-L-6-v2\ntop-20 to top-5"]
-        FR --> CE
     end
 
     CE --> R([Top-5 Ranked Passages])
@@ -95,11 +95,11 @@ flowchart LR
 
     subgraph STORE["FAISS Index"]
         E --> F["FAISS.from_documents\nbuild_vector_store"]
-        F --> G[("FAISS Index\n16,626 text chunks\n4,678 table chunks\nsaved to disk")]
+        F --> G[("FAISS Index\n17,188 chunks\n11,898 text + 5,290 table\nsaved to disk")]
     end
 
     subgraph META["Metadata per Chunk"]
-        H["ticker\nform\nfiling_date\nsection\nis_table"]
+        H["ticker\nform\nfiling_date / report_date\nsection / item_number\nis_table\nsource_file"]
     end
 
     D --> META
@@ -114,7 +114,7 @@ flowchart LR
 
 ### 4. Gemini & Ollama — LLM Generation with Grounded Prompting
 
-How user queries and retrieved passages are assembled into a hardened prompt and dispatched to either the cloud (Gemini) or local (Ollama) LLM provider, with rate-limiting and retry logic.
+How user queries and retrieved passages are assembled into a hardened prompt and dispatched to either a cloud provider or local Ollama. Cloud providers are rate-limited; local Ollama is not.
 
 ```mermaid
 flowchart TD
@@ -133,14 +133,14 @@ flowchart TD
 
     subgraph PROVIDERS["Pluggable LLM Providers"]
         direction LR
-        GEM["GeminiProvider\ngoogle-generativeai\ngemini-2.0-flash\nAPI key auth"]
-        OLL["OllamaProvider\nlangchain-ollama\nllama3.2 local\nzero-quota"]
+        GEM["GeminiProvider\ngoogle-generativeai\ngemini-2.5-flash\nAPI key auth"]
+        OLL["OllamaProvider\nlangchain-ollama\nllama3.2 3B or qwen3:8b\nthinking off · keep-alive 30m"]
         ANT["AnthropicProvider\nclaude-3"]
         OAI["OpenAIProvider\ngpt-4o"]
     end
 
     subgraph RATELIMIT["Rate Limiting & Retry — create_rate_limited_llm"]
-        RL["RunnableLambda\nRPM throttle: 60 / rpm seconds\ntenacity exponential backoff\n5 retries on 429 / quota errors"]
+        RL["RunnableLambda\nRPM throttle 60 / rpm s (cloud only)\ntenacity exponential backoff\n5 retries on 429 / quota errors\nmax 768 output tokens"]
     end
 
     PT --> RATELIMIT
@@ -164,24 +164,26 @@ flowchart TD
 
 ### 5. Full-Stack Deployment Architecture
 
-End-to-end containerised deployment with the FastAPI backend, Streamlit UI, PostgreSQL persistence, and the Prometheus → Loki → Grafana observability stack — all wired through a single Docker network.
+End-to-end containerised deployment with the FastAPI backend, Streamlit UI, PostgreSQL persistence, and the Prometheus → Loki → Grafana observability stack — all wired through a single Docker network. The Streamlit UI and the API each load their own copy of the pipeline at startup (~0.8 GB RAM each); the UI does not call the API.
 
 ```mermaid
 flowchart TD
     USER(["User Browser"]) --> UI
+    CLIENT(["API Client"]) --> API
 
     subgraph DOCKER["Docker Network — finrag-network"]
 
         subgraph APP["Application Layer"]
-            UI["finrag-streamlit\nStreamlit UI\nport 8501"]
+            UI["finrag-streamlit\nStreamlit UI · web/serve.py\nin-process pipeline\nport 8501"]
             API["finrag-api\nFastAPI Backend\nport 8000"]
-            UI -- "REST / HTTP" --> API
         end
 
         subgraph DATA["Data Layer"]
-            PG["finrag-postgres\nPostgres 16\nport 5432\nchat history and sessions"]
-            FS[("FAISS Index\n/app/data/vector_stores\nBind Mount")]
+            PG["finrag-postgres\nPostgres 16\nport 5432\nquery logs and claim traces"]
+            FS[("FAISS Index\n/app/data/vector_stores")]
         end
+
+        UI --> FS
 
         subgraph OBS["Observability Stack"]
             PROM["finrag-prometheus\nMetrics scrape\nport 9090"]
@@ -200,10 +202,11 @@ flowchart TD
     end
 
     subgraph HOST["Host Machine"]
-        OLL_HOST["Ollama\nllama3.2\nlocalhost 11434"]
+        OLL_HOST["Ollama\nllama3.2 / qwen3:8b\nlocalhost 11434"]
     end
 
     API -- "host.docker.internal" --> OLL_HOST
+    UI -- "host.docker.internal" --> OLL_HOST
 
     style USER fill:#4A90D9,color:#fff,stroke:none
     style OLL_HOST fill:#2ECC71,color:#fff,stroke:none
@@ -223,13 +226,25 @@ pip install -e .
 
 # 2. Set up environment variables
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env (LLM provider, model, API keys if using a cloud provider)
 
-# 3. Download SEC filings
-python scripts/run_pipeline.py build
+# 3. Provide the data
+# The filings listed in data/manifest.json must be present under data/raw/ and the
+# production index under data/vector_stores/phase6_table_aware/ (both gitignored).
+# The EDGAR downloader is not part of this repository.
 
-# 4. Query the system
-python scripts/run_pipeline.py query "What was Apple's revenue in Q3 2026?"
+# 4. Pull the local models (if LLM_PROVIDER=ollama)
+ollama pull llama3.2
+ollama pull qwen3:8b
+
+# 5. Start the web UI (loads the pipeline at server start, ~30s)
+streamlit run web/serve.py
+
+# or the REST API
+uvicorn finrag.api.main:app --port 8000
+
+# or the full stack (UI, API, Postgres, Prometheus, Loki, Grafana)
+docker compose up
 ```
 
 ## Configuration
@@ -239,7 +254,7 @@ Configure via `.env` file:
 ```bash
 # LLM Provider (gemini, anthropic, openai, ollama)
 LLM_PROVIDER=ollama
-DEFAULT_LLM_MODEL=llama3.2
+DEFAULT_LLM_MODEL=llama3.2          # or qwen3:8b
 
 # Embedding model
 EMBEDDING_PROVIDER=huggingface
@@ -248,35 +263,42 @@ DEFAULT_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
 # Vector store
 VECTOR_STORE_DIR=data/vector_stores/phase6_table_aware
 
-# Rate limiting
-LLM_RPM=10
+# Generation
 LLM_TEMPERATURE=0.1
-LLM_MAX_TOKENS=4096
+LLM_MAX_TOKENS=768                  # longest eval answer ~460 tokens; fits Ollama's 4,096 context
+LLM_RPM=10                          # throttles cloud providers only; Ollama is never throttled
+
+# Ollama
+OLLAMA_KEEP_ALIVE=30m               # keep models loaded between queries
+OLLAMA_REASONING=false              # qwen3 hidden "thinking" (~6x slower) off by default
 ```
+
+The UI theme lives in `.streamlit/config.toml`.
 
 ## Commands
 
+> **Warning:** `scripts/run_pipeline.py` drives the legacy *baseline* pipeline (dense only, no tables, no reranker). `build` saves a text-only index into `VECTOR_STORE_DIR`, which defaults to the production `phase6_table_aware` index — point `VECTOR_STORE_DIR` elsewhere before running it.
+
 ```bash
-# Build vector index from SEC filings
+# Build the baseline vector index (see warning above)
 python scripts/run_pipeline.py build
 
-# Run test queries
+# Run test queries / interactive mode / single question (baseline pipeline)
 python scripts/run_pipeline.py test
-
-# Interactive query mode
 python scripts/run_pipeline.py query
-
-# Single question
 python scripts/run_pipeline.py query "What was Apple's revenue in Q3 2026?"
+
+# Inspect the explainability trace for a question (production pipeline)
+python scripts/inspect_trace.py inspect "What was Apple's total net sales in fiscal 2025?"
 ```
 
 ## Evaluation
 
 ```bash
-# Retrieval evaluation (45 questions)
+# Retrieval evaluation (eval/eval_set.json, 45 questions)
 python eval/evaluate_retrieval.py
 
-# Generation evaluation (87 questions)
+# Generation evaluation (eval/phase9_eval_set.json, 87 questions); model from DEFAULT_LLM_MODEL
 python eval/evaluate_generation.py --store data/vector_stores/phase6_table_aware --k 5 --fetch 20
 ```
 
@@ -290,16 +312,25 @@ src/finrag/
 │   ├── splitter.py        # Recursive chunking
 │   ├── chunking.py        # Fixed/recursive/section-aware chunking
 │   ├── table_extractor.py # HTML table extraction
+│   ├── sec_headings.py    # SEC section heading detection
 │   └── xbrl.py            # XBRL cleanup
 ├── embeddings/            # Embedding providers
 ├── vectorstore/           # FAISS operations
 ├── retrieval/             # Retrieval pipeline
-│   ├── __init__.py        # BM25, hybrid, reranking, filtering
+│   ├── __init__.py        # BM25, hybrid RRF, reranking, filtering
 │   └── metadata_filter.py # Query-time metadata filtering
 ├── generation/            # LLM generation
 │   └── __init__.py        # Prompts, providers, rate limiting
-├── pipeline.py            # FinRAGPipeline class
-└── cli.py                 # CLI entry point
+├── explainability/        # Claim tracing and per-stage retrieval scores
+├── api/main.py            # FastAPI service
+├── persistence/           # Postgres query logging
+├── monitoring/            # Prometheus metrics
+└── pipeline.py            # FinRAGPipeline class
+
+web/
+├── serve.py               # Streamlit entry point (preloads the pipeline)
+├── resources.py           # Shared cached pipeline loader
+└── app.py                 # Streamlit UI
 
 eval/
 ├── evaluate_generation.py # Generation evaluation
@@ -309,36 +340,39 @@ eval/
 ├── evaluate_reranking.py  # Reranker evaluation
 ├── evaluate_filtering.py  # Metadata filtering eval
 ├── evaluate_tables.py     # Table extraction eval
-├── evaluate_reranking.py  # Reranker evaluation
 ├── create_eval_set.py     # Eval set creation
 └── add_table_questions.py # Table question generation
+
+knowledge-graph/           # Project knowledge graph (build status, decisions, open issues)
 ```
 
 ## Architecture
 
 ```
-SEC EDGAR → HTML Loader → Table Extractor → Section-Aware Chunking
-    → BGE-base Embeddings → FAISS Index (16,626 chunks, 4,678 tables)
-    → Hybrid Retrieval (Dense 0.7 / BM25 0.3)
-    → Metadata Filtering (ticker/form/year/section)
+SEC EDGAR filings (data/raw) → HTML Loader → Table Extractor → Section-Aware Chunking
+    → BGE-base Embeddings → FAISS Index (17,188 chunks: 11,898 text + 5,290 table)
+    → Hybrid Retrieval (Dense 0.7 / BM25 0.3, top-20)
+    → Metadata Filtering (ticker/form/section)
     → Cross-Encoder Reranker (top-20 → top-5)
-    → Hardened Prompt + Ollama LLM
+    → Hardened Prompt + Ollama LLM (llama3.2 or qwen3:8b)
 ```
 
-## Phase 9 Evaluation Results (87 questions)
+## Evaluation Results (87 questions, 2026-10-08)
 
-| Config | Accuracy | Format % | Citation % | Grounded % | Refusal % |
-|----------|----------|----------|------------|------------|-----------|
-| Hardened + Rerank | 51.7% | 66.7% | 75.9% | 85.1% | 89.7% |
-| Hardened + No Rerank | 54.0% | 63.2% | 74.7% | 94.3% | 82.8% |
+Strict scoring: a refusal on an answerable question counts as wrong. Single runs; expect a few questions of run-to-run variation.
 
-See `eval/results/phase9_summary.md` for full results.
+| Model | Accuracy | Format % | Citation % | Grounded % | Refusal % | Avg latency |
+|-------|----------|----------|------------|------------|-----------|-------------|
+| llama3.2 (3B) | 82.8% | 79.3% | 74.7% | 98.9% | 90.8% | 1.3s |
+| qwen3:8b (thinking off) | 79.3% | 98.9% | 98.9% | 96.6% | 81.6% | 3.0s |
+
+Latency is LLM generation only; a full query in the web UI takes ~1.5–2s with llama3.2. Earlier figures are superseded: the original Phase 9 result (51.7%) predates the October prompt and evaluator fixes, qwen3:8b's "92%" was an evaluator bug that scored some refusals as correct, and runs between 2026-09-06 and 2026-10-08 reranked only 5 candidates. See `decisions_log` in `knowledge-graph/knowledge-graph.json` for the history.
 
 ## Development
 
 ```bash
-# Run tests
-pytest tests/
+# Run tests (excluding the two production-pipeline tests)
+pytest tests/ -k "not ProductionPipeline"
 
 # Run retrieval evaluation
 python eval/evaluate_retrieval.py
@@ -347,11 +381,15 @@ python eval/evaluate_retrieval.py
 python eval/evaluate_generation.py --store data/vector_stores/phase6_table_aware --k 5 --fetch 20
 ```
 
+`test_build_production_pipeline` re-embeds the whole corpus and writes into the production index directory — run it only deliberately. Five tests currently fail for known reasons (stale tests after intentional code changes); see `test_status` in the knowledge graph.
+
 ## Requirements
 
-- Python 3.10+
-- Ollama (for local LLM) or API keys for cloud providers
-- ~4GB RAM for embeddings + FAISS index
+- Python 3.10+ (Docker image: 3.11)
+- Streamlit 1.63+ (for `web/serve.py`)
+- Ollama (for local LLMs) or API keys for cloud providers
+- ~1 GB RAM per process that loads the pipeline (UI and API each load one)
+- GPU with 8 GB VRAM fits one local model at a time (llama3.2 2.4 GB, qwen3:8b 5.2 GB)
 - ~2GB disk for SEC filings + vector store
 
 ## License

@@ -57,3 +57,6 @@ tmp/
 # OS / Editor
 *.swp
 *.swo
+
+# Local notes: known issues and drawbacks (see knowledge-graph for history)
+ISSUES.txt

@@ -1,8 +1,8 @@
 {
-  "project": "FinRAG - Financial Document Intelligence & Evidence-Grounded Retrieval System",
-  "scope_note": "This graph covers the RAG model/pipeline only. Full-stack (API, frontend, deployment) is intentionally excluded until the model nodes below are built and evaluated. See tasklist.md.",
+  "project": "FIEND - Financial Intelligence and Evidence Nexus Decisioning",
+  "scope_note": "Graph covers the RAG model/pipeline plus the full-stack layer (FastAPI, Streamlit, Postgres, Docker, Prometheus/Loki/Grafana) built 2026-09-07 to 2026-09-14. See tasklist.md.",
   "framework": "LangChain (LCEL)",
-  "stack_decision": "Pluggable provider architecture (4 providers). Switch via LLM_PROVIDER in .env: gemini (Google, primary, gemini-2.5-flash), anthropic (Claude 3.5 Sonnet), openai (GPT-4o/mini), ollama (local llama3.2/mistral/phi3). Embeddings: BGE-base-en-v1.5 (local, primary), Gemini text-embedding-004 (fallback). Provider toggled via LLM_PROVIDER in .env. No cost for local providers — Ollama runs offline, zero quota limits.",
+  "stack_decision": "Pluggable provider architecture (4 providers). Switch via LLM_PROVIDER in .env: gemini (Google, primary, gemini-2.5-flash), anthropic (Claude 3.5 Sonnet), openai (GPT-4o/mini), ollama (local; llama3.2 3B default, qwen3:8b 'accurate' option in web UI). Embeddings: BGE-base-en-v1.5 (local, primary), Gemini models/gemini-embedding-001 (fallback). Provider toggled via LLM_PROVIDER in .env. No cost for local providers — Ollama runs offline, zero quota limits.",
   "build_status": {
     "phase_0_setup": "COMPLETE",
     "phase_1_baseline_rag": "COMPLETE — pipeline running, 5/5 test questions answered, grounded citations working",
@@ -13,24 +13,23 @@
     "phase_6_table_handling": "COMPLETE — 2,321 tables extracted as Markdown documents with context headers, 10 table-dependent questions added to benchmark (eval_36–eval_45). Table-aware retrieval: 100% Hit@5 on table-dependent questions, MRR improved 0.760→0.833, 46% table retrieval rate in top-5. No regression on non-table questions (97.8% Hit@5). Results in eval/results/phase6_table_comparison.json and eval/results/phase6_summary.md",
     "phase_7_reranking": "COMPLETE — Cross-encoder reranking (ms-marco-MiniLM-L-6-v2) evaluated on Phase 6 table-aware index (16,626 chunks). Configurations: no-rerank (78ms), top-20→5 (349ms), top-50→5 (745ms). Best MRR@5: 0.978 (top-20→5); Best NDCG@5: 0.886 (top-50→5). Table-dependent: MRR 0.833→1.000 (top-20), Recall 55%→61.7% (top-50). Cross-document: Recall 60%→80% (top-20). Production: **top-20→5** — best MRR (0.978), perfect table MRR (1.000), nearly matches top-50 NDCG with half latency. Results in eval/results/phase7_reranking_comparison.json, eval/results/phase7_summary.md, knowledge-graph/phase7_summary.md",
     "phase_8_grounded_generation": "INFRASTRUCTURE COMPLETE (eval blocked by daily quota) — Hardened prompt with per-claim citations, mandatory refusal, structured output format. Generation test set (20 questions) in eval/phase8_generation_set.json. Evaluation harness in eval/evaluate_generation.py with deterministic checks. Rate-limited LLM with exponential backoff. Production pipeline: table-aware corpus → filtered hybrid → rerank top-20→5 → hardened prompt → Gemini. Full eval blocked by Gemini 20 req/day quota (resets midnight UTC).",
-    "phase_9_evaluation": "COMPLETE WITH REVALIDATION REQUIRED — retrieval artifacts exist, but a 2026-09-01 implementation audit found that generation scoring mislabels all unanswerable items and omits keyword coverage from correctness; the reusable FinRAGPipeline also does not construct the documented table-aware, top-20→5 production stack. Repair and rerun Phase 8/9 generation evaluation before deployment.",
-    "post_implementation_audit": "OPEN — 2026-09-01 audit identified P0 production-pipeline and evaluation-validity issues plus P1 citation, retrieval-evaluator, configuration-drift, dependency, and test-coverage issues. See knowledge-graph/tasklist.md.",
+    "phase_9_evaluation": "COMPLETE — 87-question benchmark (eval/phase9_eval_set.json; duplicate ids eval_62/eval_81 renamed to eval_88/eval_89 on 2026-10-08). Audit remediation 2026-09-05/06 (a1851b2, 17811b6, 8427ad9). Strict-scored results (refusal on an answerable question = wrong, scorer fixed 2026-10-08): llama3.2 81.6% / 5.6s avg with true rerank top-20→5 (phase9_generation_rerank20_llama32.json); qwen3:8b thinking off 78.2% / 5.5s (phase9_generation_qwen3_8b_nothink.json). Older runs reranked only ≤5 candidates and the qwen3:8b '92%' was a scorer artifact (strict 64.4%). eval/results/phase9_summary.md still reports only the original 51.7% run.",
+    "post_implementation_audit": "RESOLVED 2026-10-08 — 2026-09-01 audit items fixed 2026-09-05/06. Follow-up findings fixed 2026-10-08: (1) commit 8427ad9 replaced LangChain's EnsembleRetriever with a custom RRF retriever whose k defaults to config.retrieval.k=5, so from 2026-09-06 every Phase 9 / October generation eval reranked ≤5 candidates (Phase 7's top-20→5 numbers predate this and are valid); production additionally cut to 5 in FilteredRetriever before reranking. Both paths now feed 20 candidates to the reranker. (2) evaluate_generation.py scored refusals as correct when their explanation contained the expected keywords; now a refusal on a supported question is always wrong. Pre-existing failing tests (not fixed): 2 fiscal_year extraction tests (fiscal_year extraction intentionally disabled in cf38533) and 3 TestAnswerFormat tests (check_answer_format signature changed).",
     "phase_10_explainability": "COMPLETE — EvidenceChunk, ClaimTrace, ExplainableResult models with dense/BM25/RRF/rerank scores per chunk. Claim attribution engine maps answer sentences → citation → exact retrieved chunk + table row. Pipeline exposes query_explainable() returning structured ExplainableResult (JSON + rich console). CLI inspect_trace.py for debugging. Unit tests in tests/test_explainability.py (13 passing).",
     "phase_11_finetuning": "NOT_STARTED",
-    "phase_12_fullstack": "DEFERRED"
+    "phase_12_fullstack": "BUILT AHEAD OF GATE — FastAPI (src/finrag/api/main.py), Streamlit UI (web/app.py), Postgres query logging (src/finrag/persistence/), Prometheus metrics (src/finrag/monitoring/), Docker + docker-compose, Loki/Promtail/Grafana dashboards (monitoring/). Built 2026-09-07..09-14.",
+    "open_issues_2026_10_08": "Full list: ISSUES.txt (gitignored, local). Verified, not yet fixed: (4) XBRL facts discarded; (5) fiscal_year empty on all chunks though report_date present; (6) 2,386 text chunks (20%) lack item_number; (7) corpus = latest 10-K + 10-Q per company; (8) eval set used for tuning and reporting, tiny categories, single runs; (9) FilteredRetriever over-fetch never applies to the hybrid EnsembleRetriever (no search_kwargs) — filter sees only the 20 hybrid candidates; (10) scripts/run_pipeline.py build/query/test use the legacy baseline pipeline and `build` saves a text-only index into VECTOR_STORE_DIR (default: production phase6_table_aware); (11) web/app.py evidence-card f-string precedence bug drops BM25/rerank scores, passage text and closing </div>; (12) Streamlit loads its own pipeline in-process, not via the FastAPI service (two ~0.8 GB copies in Docker); (13) sidebar filters/toggles/slider not wired; model help text stale.",
+    "resolved_2026_10_08": "(1) RRF dedup key → (source_file, full page_content); explainability _chunk_id suffix → md5(source_file + full text)[:8] (unique per chunk, stable across processes for Postgres); duplicate _chunk_id in pipeline.py removed. Tests: TestChunkIdentity. Colliding chunks 3,338 → 664 (remaining are byte-identical chunks within one filing). Key cost 3.6µs/query. Eval effect within noise: llama3.2 85.1→82.8%, qwen3:8b 78.2→79.3%, numerical +1 each. (2) FinRAGPipeline keeps one BM25 (k=20) and one CrossEncoder, shared by the chain (build_retrieval_pipeline(bm25=, reranker=)) and query_explainable; dense scores use vector_store.embeddings; query_explainable/query_with_evidence generate from already-retrieved docs via self._generate (no second retrieval+rerank). Per-query query_explainable 18-23s → 1.3-6.4s (remainder is LLM). (3) load_production_pipeline builds BM25 from the FAISS docstore (load_documents_from_index) instead of re-parsing 30 filings: 70s → 18.7s (+~10s imports); ~0.8 GiB RSS after load. load_documents_for_bm25 and duplicate load_hybrid_pipeline/build_index/load_index removed. Caveat: after changing chunking the index must be rebuilt, or BM25 searches stale chunks. Note: tests/test_finrag.py::test_build_production_pipeline re-embeds the corpus and writes into data/vector_stores/phase6_table_aware — do not run it casually.",
+    "test_status": "43 passed, 5 failed, 2 production-pipeline tests excluded from routine runs (2026-10-08). Failures pre-date this session: TestMetadataFilter::test_extract_fiscal_year and ::test_extract_fy_format expect fiscal-year extraction, deliberately disabled in cf38533; TestAnswerFormat (3 tests) call check_answer_format(answer) but 63d360b added a required citation_count argument. test_build_production_pipeline re-embeds the corpus into the production index directory."
   },
   "nodes": [
     {
       "id": "data_source",
       "type": "data",
       "label": "SEC EDGAR Filings (10-K / 10-Q)",
-      "status": "DONE",
-      "detail": "30 filings downloaded (15x10-K + 15x10-Q) across 15 companies: AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, JPM, GS, BAC, WMT, COST, JNJ, UNH, XOM. Stored as SEC-native HTML in data/raw/, indexed in data/manifest.json. Total: 125.71 MB. Fetched via EDGAR HTTPS API with User-Agent compliance and 0.2s rate-limiting delay.",
-      "files": [
-        "src/data/edgar_downloader.py",
-        "src/data/verify_dataset.py",
-        "data/manifest.json"
-      ]
+      "status": "DONE (downloader scripts not in repo)",
+      "detail": "30 filings downloaded (15x10-K + 15x10-Q) across 15 companies: AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, JPM, GS, BAC, WMT, COST, JNJ, UNH, XOM. Stored as SEC-native HTML in data/raw/, indexed in data/manifest.json. Total: 125.71 MB. Fetched via EDGAR HTTPS API with User-Agent compliance and 0.2s rate-limiting delay. NOTE: edgar_downloader.py and verify_dataset.py (tasklist Phase 0) are not in the repo or git history; data/raw/ is gitignored.",
+      "files": ["data/manifest.json"]
     },
     {
       "id": "loader",
@@ -89,27 +88,23 @@
       "id": "embedding_model",
       "type": "component",
       "label": "Embedding Model",
-      "status": "SWITCHED TO LOCAL BGE (Phase 1 baseline)",
+      "status": "DONE (Phase 3) — BAAI/bge-base-en-v1.5 champion",
       "tool": {
-        "primary": "HuggingFaceEmbeddings — BAAI/bge-small-en-v1.5 (local, 384 dimensions, no API key, no quota limits)",
-        "fallback": "GoogleGenerativeAIEmbeddings — models/gemini-embedding-001 (Gemini free tier, 768 dimensions, 100 RPM / 1000 RPD quota)"
+        "primary": "HuggingFaceEmbeddings — BAAI/bge-base-en-v1.5 (local, 768d)",
+        "fallback": "GoogleGenerativeAIEmbeddings — models/gemini-embedding-001 (EMBEDDING_PROVIDER=gemini)"
       },
-      "detail": "Switched to local BGE embeddings for Phase 1 baseline due to Gemini free tier quota limits (100 RPM / 1000 RPD) being insufficient for 39k chunks. Phase 3 will compare BGE-small vs BGE-base vs BGE-large vs Gemini embeddings using Recall@k / MRR.",
-      "candidates_for_phase_3": [
-        "BAAI/bge-small-en-v1.5 (local, 384d — Phase 1 baseline)",
-        "BAAI/bge-base-en-v1.5 (local, 768d)",
-        "BAAI/bge-large-en-v1.5 (local, 1024d — best local quality)",
-        "models/gemini-embedding-001 (Gemini, 768d — quota limited)"
-      ]
+      "detail": "Phase 1 baseline used bge-small (Gemini quota too low for full corpus). Phase 3 compared bge-small, all-MiniLM-L6, bge-base; bge-base selected (100% Hit@5, 0.971 MRR@5). bge-large and Gemini embeddings were listed as candidates but never evaluated.",
+      "candidates_for_phase_3": ["BAAI/bge-small-en-v1.5 (local, 384d — Phase 1 baseline)", "BAAI/bge-base-en-v1.5 (local, 768d)", "BAAI/bge-large-en-v1.5 (local, 1024d — best local quality)", "models/gemini-embedding-001 (Gemini, 768d — quota limited)"],
+      "files": ["src/finrag/embeddings/__init__.py", "src/finrag/config.py", "eval/evaluate_embeddings.py"]
     },
     {
       "id": "vector_store",
       "type": "component",
       "label": "Vector Store",
-      "status": "DONE (Phase 2 + Phase 6 — 6 indexes total)",
+      "status": "DONE — 11 indexes on disk",
       "tool": "LangChain FAISS wrapper (faiss-cpu)",
-      "detail": "Holds dense embeddings + metadata. Persisted to disk at data/vector_stores/{strategy}/. FAISS chosen for local persistence and fast CPU-based ANN search. Phase 1 baseline index: data/vector_stores/baseline/ (legacy). Phase 2 indexes: data/vector_stores/{fixed,recursive,section}/ (BGE-small). Phase 3 champion index: data/vector_stores/embeddings_bge_base/ (BGE-base). Phase 6 indexes: data/vector_stores/phase6_text_only/ (15,098 text chunks) and data/vector_stores/phase6_table_aware/ (16,626 chunks, 4,678 tables). All champion indexes use BGE-base-en-v1.5.",
-      "files": ["data/vector_stores/baseline/", "data/vector_stores/fixed/", "data/vector_stores/recursive/", "data/vector_stores/section/", "data/vector_stores/embeddings_bge_base/", "data/vector_stores/phase6_text_only/", "data/vector_stores/phase6_table_aware/"]
+      "detail": "LangChain FAISS (faiss-cpu), persisted under data/vector_stores/ (gitignored). Phase 1: baseline/. Phase 2: fixed/, recursive/, section/ (BGE-small). Phase 3 candidates: embeddings_bge_small/, embeddings_minilm_l6/, embeddings_bge_base/ (champion). Phase 6: text_only/ (15,098 text chunks), table_aware/, tables_bge_base/ and phase6_table_aware/ (16,626 chunks, 4,678 tables). Production + eval default: phase6_table_aware/ (config.py VECTOR_STORE_DIR, evaluate_generation.py --store). table_aware/ and tables_bge_base/ appear to be earlier copies of the table-aware index. eval/phase9_config.json names the index 'phase6_tables_bge_base', which does not exist. phase6_table_aware/ currently holds 17,188 vectors (eval log 2026-10-08), not the 16,626 recorded in Phase 6/7 — the index has been rebuilt since. Verified 2026-10-08 from the docstore: 17,188 chunks = 11,898 text + 5,290 table.",
+      "files": ["src/finrag/vectorstore/__init__.py", "data/vector_stores/baseline/", "data/vector_stores/fixed/", "data/vector_stores/recursive/", "data/vector_stores/section/", "data/vector_stores/embeddings_bge_small/", "data/vector_stores/embeddings_minilm_l6/", "data/vector_stores/embeddings_bge_base/", "data/vector_stores/text_only/", "data/vector_stores/table_aware/", "data/vector_stores/tables_bge_base/", "data/vector_stores/phase6_table_aware/"]
     },
     {
       "id": "dense_retriever",
@@ -117,30 +112,34 @@
       "label": "Dense (Semantic) Retriever",
       "status": "DONE",
       "tool": "LangChain VectorStoreRetriever (FAISS)",
-      "detail": "Pure cosine-similarity vector search. Phase 1 baseline retriever. Phase 2 uses it for all three chunking strategy indexes."
+      "detail": "Pure cosine-similarity vector search. Phase 1 baseline retriever. Phase 2 uses it for all three chunking strategy indexes. Production fetches k=20 candidates (pipeline.build_chain).",
+      "files": ["src/finrag/vectorstore/__init__.py"]
     },
     {
       "id": "bm25_retriever",
       "type": "component",
       "label": "Keyword Retriever (BM25)",
-      "status": "PENDING (Phase 4)",
+      "status": "DONE (Phase 4)",
       "tool": "LangChain BM25Retriever (rank_bm25)",
-      "detail": "Sparse keyword retrieval. Essential for financial queries involving exact tickers, numerical values (e.g. '$391.0B'), fiscal year references, and technical GAAP terminology that semantic search may under-rank."
+      "detail": "Sparse keyword retrieval. Essential for financial queries involving exact tickers, numerical values (e.g. '$391.0B'), fiscal year references, and technical GAAP terminology that semantic search may under-rank.",
+      "files": ["src/finrag/retrieval/__init__.py", "eval/evaluate_hybrid.py"]
     },
     {
       "id": "hybrid_retriever",
       "type": "component",
       "label": "Hybrid Retriever",
-      "status": "PENDING (Phase 4)",
+      "status": "DONE (Phase 4)",
       "tool": "LangChain EnsembleRetriever",
-      "detail": "Combines dense_retriever and bm25_retriever using Reciprocal Rank Fusion (RRF) with configurable weighting (default 0.5/0.5). Addresses the known weakness of pure semantic search on numerical and exact-match financial queries."
+      "detail": "Custom RRF EnsembleRetriever (rrf_k=60) in src/finrag/retrieval/__init__.py combining BM25 + dense. Production weights Dense 0.7 / BM25 0.3 (config.py DENSE_WEIGHT/BM25_WEIGHT), selected in Phase 4 (1.000 MRR@5).",
+      "files": ["src/finrag/retrieval/__init__.py", "eval/evaluate_hybrid.py"]
     },
     {
       "id": "metadata_filter",
       "type": "component",
       "label": "Metadata Filtering",
-      "status": "PENDING (Phase 5)",
-      "detail": "Pre-retrieval filters applied before semantic search to scope results to a specific company, fiscal year, form type, or section. Prevents cross-company and cross-year answer contamination. Implemented as FAISS metadata filters on Document.metadata fields."
+      "status": "DONE (Phase 5; leak fixes 2026-10-02)",
+      "detail": "FilteredRetriever + extract_metadata_filter() auto-extract ticker/form/year/section from the query, over-fetch, then filter on Document.metadata (not native FAISS filters). Commit cf38533 stopped cross-company ticker backfill leakage and bypasses the fiscal_year filter (fiscal_year not populated in metadata).",
+      "files": ["src/finrag/retrieval/metadata_filter.py", "eval/evaluate_filtering.py"]
     },
     {
       "id": "reranker",
@@ -148,10 +147,10 @@
       "label": "Reranker",
       "status": "DONE (Phase 7)",
       "tool": "LangChain ContextualCompressionRetriever + local cross-encoder (cross-encoder/ms-marco-MiniLM-L-6-v2)",
-      "detail": "Cross-encoder rescores top-k candidates against the exact query (more accurate than bi-encoder similarity). Runs fully locally — no API key needed. Evaluated at top-20→5 and top-50→5 depths. Production setting: **top-20→5** — best MRR@5 (0.978), perfect table MRR (1.000), nearly matches top-50 NDCG (0.872 vs 0.886) with half the latency (349ms vs 745ms).",
-      "files": ["eval/evaluate_reranking.py"]
+      "detail": "Cross-encoder rescores top-k candidates against the exact query (more accurate than bi-encoder similarity). Runs fully locally — no API key needed. Evaluated at top-20→5 and top-50→5 depths. Production setting: **top-20→5** — best MRR@5 (0.978), perfect table MRR (1.000), nearly matches top-50 NDCG (0.872 vs 0.886) with half the latency (349ms vs 745ms). FIXED 2026-10-08: since 8427ad9 (2026-09-06) the custom EnsembleRetriever truncated to k=5 and production's FilteredRetriever cut to 5 before reranking, so the reranker only reordered ≤5 docs. build_retrieval_pipeline, evaluate_generation.py and evaluate_reranking.py now pass fetch_k (20) through to the reranker. Regression test: tests/test_finrag.py::TestRerankCandidatePool. config.py rerank_top_k=10 is unused (overridden by final_k).",
+      "files": ["src/finrag/retrieval/__init__.py", "eval/evaluate_reranking.py"]
     },
-{
+    {
       "id": "prompt_template",
       "type": "component",
       "label": "Grounded-Answer Prompt Template",
@@ -169,16 +168,31 @@
         "gemini": "ChatGoogleGenerativeAI — gemini-2.5-flash (primary, 20 req/day free tier)",
         "anthropic": "ChatAnthropic — claude-3-5-sonnet-20241022 (high-quality reasoning)",
         "openai": "ChatOpenAI — gpt-4o-mini (fast, cost-effective)",
-        "ollama": "ChatOllama — llama3.2/mistral/phi3 (local, offline, zero quota)"
+        "ollama": "ChatOllama — llama3.2 (3B, 'Fast', default) / qwen3:8b ('Accurate'), selectable in web/app.py via build_chain(model_name=...)"
       },
-      "detail": "Pluggable provider architecture via LLM_PROVIDER in .env. Factory pattern with LLMProvider protocol and registry (src/finrag/generation/__init__.py). Switch providers instantly: LLM_PROVIDER=gemini|anthropic|openai|ollama. Rate limiting: local RPM throttle + tenacity exponential backoff on 429. Ollama runs locally (no API key, zero quota). Files: src/finrag/generation/__init__.py, src/finrag/config.py.",
+      "detail": "Pluggable provider architecture via LLM_PROVIDER in .env. Factory pattern with LLMProvider protocol and registry (src/finrag/generation/__init__.py). Switch providers instantly: LLM_PROVIDER=gemini|anthropic|openai|ollama. Rate limiting: local RPM throttle + tenacity exponential backoff on 429. Ollama runs locally (no API key, zero quota). Files: src/finrag/generation/__init__.py, src/finrag/config.py. Model switch (commit 21c4d19, 2026-10-06): FinRAGPipeline.build_chain(model_name=...) swaps the LLM without reloading the index. Strict-scored eval (2026-10-08, rerank 20→5): llama3.2 81.6% / 5.6s avg; qwen3:8b with thinking off 78.2% / 5.5s (17 over-refusals; prompt was tuned on llama3.2); qwen3:8b with thinking on 64.4% / 12.2s (28 over-refusals); qwen3:4b 40.2% / 31s. qwen3's speed gap was entirely its hidden thinking mode: OllamaProvider now passes reasoning=False unless OLLAMA_REASONING=true. Simulated llama→qwen cascade (escalate when llama's answer fails format/citation-grounding checks or refuses): 87.4% at 7.3s avg. web/app.py MODEL_HELP still claims 86%/92% and 6s/12s. config.py dataclass defaults (ollama/llama3.2) differ from from_env defaults (gemini/gemini-2.5-flash); .env.example sets ollama/llama3.2. Speed fixes 2026-10-08: (1) no RPM throttle for ollama; (2) LLM_MAX_TOKENS 4096→768 — llama3.2 occasionally ran to the 4096 cap (~31s), longest legitimate eval answer ≈460 tokens, and max prompt 2,365 + 768 fits Ollama's 4096 ctx; (3) OLLAMA_KEEP_ALIVE=30m (Ollama default 5m unload costs ~2.3-2.8s reload); (4) OLLAMA_REASONING=false. Post-fix eval: llama3.2 85.1% strict, 1.3s avg / 2.3s p90, 6 over-refusals; qwen3:8b 78.2% strict, 2.9s avg / 3.9s p90, 17 over-refusals. Measured per call on RTX 5070 Laptop 8GB (Ollama 0.35.1, 8 production prompts): llama3.2 ~1,690 prompt tok, ~250 output tok typical, 131 tok/s, ~2.1s, 2.4 GiB VRAM; qwen3:8b no-think ~1,810 prompt tok, ~156 output tok, 65 tok/s, ~3.0s, 5.2 GiB VRAM; retrieval+rerank ~0.25s; pipeline cold load ~70s, ~1.5 GB RAM. Both models do not co-reside in 8 GB: Ollama evicts one, model swap costs 4.4s (llama3.2) / 5.0s (qwen3:8b).",
       "free_tier_limits": {
-        "gemini": {"model": "gemini-2.5-flash", "requests_per_day": 20, "requests_per_minute": 10, "cost": "$0"},
-        "anthropic": {"model": "claude-3-5-sonnet", "cost": "API pricing"},
-        "openai": {"model": "gpt-4o-mini", "cost": "API pricing"},
-        "ollama": {"model": "llama3.2", "requests_per_day": "unlimited", "cost": "$0 (local)"}
+        "gemini": {
+          "model": "gemini-2.5-flash",
+          "requests_per_day": 20,
+          "requests_per_minute": 10,
+          "cost": "$0"
+        },
+        "anthropic": {
+          "model": "claude-3-5-sonnet",
+          "cost": "API pricing"
+        },
+        "openai": {
+          "model": "gpt-4o-mini",
+          "cost": "API pricing"
+        },
+        "ollama": {
+          "model": "llama3.2 / qwen3:8b",
+          "requests_per_day": "unlimited",
+          "cost": "$0 (local)"
+        }
       },
-      "files": ["src/finrag/generation/__init__.py", "src/finrag/config.py"]
+      "files": ["src/finrag/generation/__init__.py", "src/finrag/config.py", "web/app.py"]
     },
     {
       "id": "provider_factory",
@@ -193,26 +207,27 @@
       "id": "rate_limiter",
       "type": "component",
       "label": "Rate-Limit Backoff Wrapper",
-      "status": "DONE (Phase 8 enhanced)",
+      "status": "DONE (Phase 8; local bypass 2026-10-08)",
       "tool": "RunnableLambda with tenacity retry (exponential backoff + jitter) + local RPM throttle",
-      "detail": "Wraps Gemini API calls: local RPM throttle (10 RPM) + tenacity retry with exponential backoff + jitter on 429 errors (max 5 attempts, up to 60s wait). Handles daily quota exhaustion gracefully. Implemented as create_rate_limited_llm() in generation module.",
+      "detail": "Wraps Gemini API calls: local RPM throttle (10 RPM) + tenacity retry with exponential backoff + jitter on 429 errors (max 5 attempts, up to 60s wait). Handles daily quota exhaustion gracefully. Implemented as create_rate_limited_llm() in generation module. 2026-10-08: the RPM throttle (min 60/LLM_RPM s between calls = 6s at RPM 10) is skipped for provider=ollama — it was the dominant term in all local eval latencies (~5.5-5.8s). create_rate_limited_llm(rpm=None) disables it; tenacity retry/backoff still applies. Test: TestLocalProviderNotThrottled.",
       "files": ["src/finrag/generation/__init__.py"]
     },
     {
       "id": "rag_chain",
       "type": "component",
       "label": "End-to-End RAG Chain",
-      "status": "DONE (Phase 1 baseline)",
+      "status": "DONE — production pipeline (load_production_pipeline)",
       "tool": "LangChain LCEL: retriever | prompt | llm | StrOutputParser",
-      "detail": "The assembled pipeline. Phase 1 built the simplest working version (dense retriever only, basic prompt, gemini-2.0-flash). 5/5 test questions answered end-to-end with grounded citations. Every subsequent phase is a controlled variant measured against this Phase 1 baseline."
+      "detail": "LCEL chain in FinRAGPipeline.build_chain: phase6_table_aware index → BGE-base dense (k=20) + BM25, RRF 0.7/0.3 → metadata filter → cross-encoder rerank → hardened prompt → LLM. Startup loads FAISS + docstore chunks, BGE, one BM25 and one CrossEncoder once (~19s); per query only retrieval (~0.1-0.4s) + LLM.",
+      "files": ["src/finrag/pipeline.py", "scripts/run_pipeline.py"]
     },
-{
+    {
       "id": "eval_dataset",
       "type": "component",
       "label": "Evaluation Benchmark",
       "status": "DONE (Phase 3 + Phase 6 expanded + Phase 8 generation set)",
-      "detail": "45 retrieval Q&A pairs in eval/eval_set.json (35 original + 10 table-dependent). Plus 20 generation Q&A pairs in eval/phase8_generation_set.json covering supported numerical/table-dependent/factual, temporal, cross-document, unanswerable (future/absent/unsupported/ambiguous). Each item has id, category, ticker, form, question, target_sections, ground_truth_keywords, expected_answer, requires_table, expected_refusal.",
-      "files": ["eval/eval_set.json", "eval/phase8_generation_set.json"]
+      "detail": "45 retrieval Q&A pairs in eval/eval_set.json (35 original + 10 table-dependent). Plus 20 generation Q&A pairs in eval/phase8_generation_set.json covering supported numerical/table-dependent/factual, temporal, cross-document, unanswerable (future/absent/unsupported/ambiguous). Each item has id, category, ticker, form, question, target_sections, ground_truth_keywords, expected_answer, requires_table, expected_refusal. Phase 9: 87-question set in eval/phase9_eval_set.json (17 with expected_refusal=true); frozen config in eval/phase9_config.json. Duplicate ids fixed 2026-10-08 (second eval_62 → eval_88, second eval_81 → eval_89); results files before that date contain the duplicates.",
+      "files": ["eval/eval_set.json", "eval/phase8_generation_set.json", "eval/phase9_eval_set.json", "eval/phase9_config.json"]
     },
     {
       "id": "retrieval_metrics",
@@ -225,17 +240,17 @@
       "id": "generation_metrics",
       "type": "metric",
       "label": "Generation Metrics",
-      "status": "DONE (Phase 9)",
+      "status": "DONE (Phase 9 + 2026-10 reruns)",
       "tool": "Custom evaluation harness (eval/evaluate_generation.py) with deterministic checks: citation format/grounding/format compliance, refusal correctness, keyword coverage, per-category breakdown. RAGAS/DeepEval integration pending.",
-      "detail": "Deterministic layer: citation regex validation, grounding against retrieved metadata, Answer:/Evidence: format compliance, exact refusal phrase match, keyword coverage. LLM-as-judge layer (RAGAS/DeepEval) for faithfulness/relevance pending. Phase 9 results: Accuracy 51.7%, Grounded 85.1%, Citation validity 75.9%, Format compliance 66.7%, Refusal accuracy 89.7%. Per-category breakdown: supported_numerical, supported_factual, supported_table_dependent, temporal, cross_document, unanswerable_future, unanswerable_absent_company, unanswerable_unsupported_causal, unanswerable_outside_corpus, unanswerable_specific_metric, ambiguous_contradictory.",
-      "files": ["eval/evaluate_generation.py", "eval/results/phase9_generation_comparison.json"]
+      "detail": "Deterministic layer: citation regex validation, grounding against retrieved metadata, Answer:/Evidence: format compliance, exact refusal phrase match, keyword coverage. LLM-as-judge layer (RAGAS/DeepEval) for faithfulness/relevance pending. Phase 9 results: Accuracy 51.7%, Grounded 85.1%, Citation validity 75.9%, Format compliance 66.7%, Refusal accuracy 89.7%. Per-category breakdown: supported_numerical, supported_factual, supported_table_dependent, temporal, cross_document, unanswerable_future, unanswerable_absent_company, unanswerable_unsupported_causal, unanswerable_outside_corpus, unanswerable_specific_metric, ambiguous_contradictory. SCORER BUG fixed 2026-10-08: refusals on supported questions were scored correct when the refusal text contained the expected keywords (inflated qwen3:8b from 64.4% to 92.0%). Latest strict results: llama3.2 81.6%, qwen3:8b (no thinking) 78.2%.",
+      "files": ["eval/evaluate_generation.py", "eval/results/phase9_generation_comparison.json", "eval/results/phase9_generation_rerank20_llama32.json", "eval/results/phase9_generation_qwen3_8b_nothink.json"]
     },
     {
       "id": "failure_taxonomy",
       "type": "artifact",
       "label": "Failure Taxonomy",
       "status": "DONE (Phase 9)",
-      "detail": "7-category taxonomy with 68 failures analyzed on 87-question eval: Over-refusal 41% (28), Format non-compliance 26% (18), Retrieval failure 18% (12), Citation failure 12% (8), Numerical extraction 9% (6), Cross-doc confusion 7% (5), Reranking failure 6% (4). Real examples documented for each category in eval/results/phase9_summary.md and knowledge-graph/phase9_summary.md.",
+      "detail": "7-category taxonomy with 68 failures analyzed on 87-question eval: Over-refusal 41% (28), Format non-compliance 26% (18), Retrieval failure 18% (12), Citation failure 12% (8), Numerical extraction 9% (6), Cross-doc confusion 7% (5), Reranking failure 6% (4). Real examples documented for each category in eval/results/phase9_summary.md and knowledge-graph/phase9_summary.md. Taxonomy reflects the original 51.7% run only; not refreshed after the 2026-10 fixes. knowledge-graph/phase9_summary.md is gitignored and has drifted from eval/results/phase9_summary.md. There is no phase8 summary in knowledge-graph/ (only eval/results/phase8_summary.md).",
       "files": ["eval/results/phase9_summary.md", "knowledge-graph/phase9_summary.md"]
     },
     {
@@ -243,14 +258,8 @@
       "type": "component",
       "label": "Explainability / Evidence Trace",
       "status": "DONE (Phase 10)",
-      "detail": "Surfaces dense cosine similarity, BM25 rank, RRF score, and cross-encoder rerank logits per retrieved passage. Claim-to-source attribution: parses answer into claims, maps each citation [TICKER, FORM, FILING_DATE, SECTION] to exact retrieved chunk and table row. Pipeline method query_explainable() returns ExplainableResult with evidence chunks, claim traces, verification status (VERIFIED/PARTIAL/UNGROUNDED/HALLUCINATED), and retrieval diagnostics. CLI inspect_trace.py for console/JSON output.",
-      "files": [
-        "src/finrag/explainability/models.py",
-        "src/finrag/explainability/__init__.py",
-        "src/finrag/pipeline.py",
-        "scripts/inspect_trace.py",
-        "tests/test_explainability.py"
-      ]
+      "detail": "Surfaces dense cosine similarity, BM25 rank, RRF score, and cross-encoder rerank logits per retrieved passage. Claim-to-source attribution: parses answer into claims, maps each citation [TICKER, FORM, FILING_DATE, SECTION] to exact retrieved chunk and table row. Pipeline method query_explainable() returns ExplainableResult with evidence chunks, claim traces, verification status (VERIFIED/PARTIAL/UNGROUNDED/HALLUCINATED), and retrieval diagnostics. CLI inspect_trace.py for console/JSON output. 2026-10-08: reuses the pipeline's preloaded BGE/BM25/CrossEncoder and its retrieved docs (was reloading all three and retrieving twice per query); chunk ids now md5-based and stable.",
+      "files": ["src/finrag/explainability/models.py", "src/finrag/explainability/__init__.py", "src/finrag/pipeline.py", "scripts/inspect_trace.py", "tests/test_explainability.py"]
     },
     {
       "id": "embedding_finetune",
@@ -264,46 +273,192 @@
       "id": "full_stack",
       "type": "phase",
       "label": "Full-Stack Implementation (FastAPI + Frontend + Deployment)",
-      "status": "DEFERRED",
-      "detail": "Only begins after rag_chain passes Phase 9 evaluation gate. Components: FastAPI service wrapper, Postgres for metadata/query logs, React or Streamlit frontend for answers + citation trace, Docker containerisation, monitoring."
+      "status": "BUILT (ahead of Phase 9 gate)",
+      "detail": "FastAPI service (src/finrag/api/main.py), Streamlit UI with model switch + citation trace (web/app.py), Postgres query logging (src/finrag/persistence/), Prometheus metrics (src/finrag/monitoring/metrics.py), Dockerfile + docker-compose.yml, Prometheus/Loki/Promtail/Grafana configs and dashboards (monitoring/). Rebranded FIEND→FIEND 2026-09-14 (README, LICENSE); docker-compose, monitoring dashboards, eval scripts and eval/results summaries still say FIEND. Frontend 2026-10-08: started via `streamlit run web/serve.py` — an st.App wrapper whose lifespan hook loads the pipeline (web/resources.py get_pipeline, st.cache_resource) before the server accepts connections; health 200 after ~25s and the first visitor gets a warm pipeline (UI query 1.7s end-to-end vs 18-23s before). Visual design matches samanyu.dev: .streamlit/config.toml (black #000, amber #f59e0b, Michroma via Google Fonts, slate #cbd5e1 text, 4px radius, st.info as neutral cards) plus a small st.html CSS block (white headings, ghost buttons with amber hover glow, terminal-style input, tag-style status pills, amber-edged evidence chunks). .streamlit/config.toml is now tracked and copied into the Docker image; streamlit>=1.63.0 required. Known UI gaps (pre-existing, not fixed): evidence-card f-string bug (see open issues); the UI runs its own in-process pipeline rather than calling the API; sidebar Company/Filing Type filters, reranker/filtering toggles and confidence threshold are not wired into the query; MODEL_HELP accuracy/latency text is stale; Streamlit's file watcher logs a harmless torchvision traceback while scanning transformers.",
+      "files": [".streamlit/config.toml", "Dockerfile", "docker-compose.yml", "monitoring/", "requirements-docker.txt", "requirements-prod.txt", "src/finrag/api/main.py", "src/finrag/monitoring/metrics.py", "src/finrag/persistence/", "web/app.py", "web/resources.py", "web/serve.py"]
     }
   ],
   "edges": [
-    { "from": "data_source", "to": "loader", "relation": "feeds_into" },
-    { "from": "loader", "to": "table_extractor", "relation": "feeds_into" },
-    { "from": "loader", "to": "splitter_fixed", "relation": "feeds_into" },
-    { "from": "loader", "to": "splitter_recursive", "relation": "feeds_into" },
-    { "from": "table_extractor", "to": "metadata_schema", "relation": "annotated_with" },
-    { "from": "splitter_fixed", "to": "metadata_schema", "relation": "annotated_with" },
-    { "from": "splitter_recursive", "to": "metadata_schema", "relation": "annotated_with" },
-    { "from": "metadata_schema", "to": "embedding_model", "relation": "feeds_into" },
-    { "from": "embedding_model", "to": "vector_store", "relation": "populates" },
-    { "from": "vector_store", "to": "dense_retriever", "relation": "backs" },
-    { "from": "metadata_schema", "to": "bm25_retriever", "relation": "backs" },
-    { "from": "dense_retriever", "to": "hybrid_retriever", "relation": "component_of" },
-    { "from": "bm25_retriever", "to": "hybrid_retriever", "relation": "component_of" },
-    { "from": "metadata_filter", "to": "hybrid_retriever", "relation": "applied_before" },
-    { "from": "hybrid_retriever", "to": "reranker", "relation": "feeds_into" },
-    { "from": "reranker", "to": "prompt_template", "relation": "feeds_into" },
-    { "from": "prompt_template", "to": "llm", "relation": "feeds_into" },
-    { "from": "rate_limiter", "to": "llm", "relation": "wraps" },
-    { "from": "dense_retriever", "to": "rag_chain", "relation": "assembled_into" },
-    { "from": "hybrid_retriever", "to": "rag_chain", "relation": "assembled_into" },
-    { "from": "reranker", "to": "rag_chain", "relation": "assembled_into" },
-    { "from": "prompt_template", "to": "rag_chain", "relation": "assembled_into" },
-    { "from": "llm", "to": "rag_chain", "relation": "assembled_into" },
-    { "from": "rag_chain", "to": "eval_dataset", "relation": "evaluated_against" },
-    { "from": "eval_dataset", "to": "retrieval_metrics", "relation": "measures" },
-    { "from": "eval_dataset", "to": "generation_metrics", "relation": "measures" },
-    { "from": "retrieval_metrics", "to": "failure_taxonomy", "relation": "informs" },
-    { "from": "generation_metrics", "to": "failure_taxonomy", "relation": "informs" },
-    { "from": "failure_taxonomy", "to": "explainability_layer", "relation": "informs" },
-    { "from": "rag_chain", "to": "explainability_layer", "relation": "exposed_by" },
-    { "from": "embedding_model", "to": "embedding_finetune", "relation": "optionally_replaced_by" },
-    { "from": "embedding_finetune", "to": "vector_store", "relation": "optionally_populates" },
-    { "from": "explainability_layer", "to": "full_stack", "relation": "prerequisite_for" },
-    { "from": "eval_dataset", "to": "full_stack", "relation": "prerequisite_for" },
-    { "from": "failure_taxonomy", "to": "full_stack", "relation": "prerequisite_for" }
+    {
+      "from": "data_source",
+      "to": "loader",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "loader",
+      "to": "table_extractor",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "loader",
+      "to": "splitter_fixed",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "loader",
+      "to": "splitter_recursive",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "table_extractor",
+      "to": "metadata_schema",
+      "relation": "annotated_with"
+    },
+    {
+      "from": "splitter_fixed",
+      "to": "metadata_schema",
+      "relation": "annotated_with"
+    },
+    {
+      "from": "splitter_recursive",
+      "to": "metadata_schema",
+      "relation": "annotated_with"
+    },
+    {
+      "from": "metadata_schema",
+      "to": "embedding_model",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "embedding_model",
+      "to": "vector_store",
+      "relation": "populates"
+    },
+    {
+      "from": "vector_store",
+      "to": "dense_retriever",
+      "relation": "backs"
+    },
+    {
+      "from": "metadata_schema",
+      "to": "bm25_retriever",
+      "relation": "backs"
+    },
+    {
+      "from": "dense_retriever",
+      "to": "hybrid_retriever",
+      "relation": "component_of"
+    },
+    {
+      "from": "bm25_retriever",
+      "to": "hybrid_retriever",
+      "relation": "component_of"
+    },
+    {
+      "from": "metadata_filter",
+      "to": "hybrid_retriever",
+      "relation": "applied_before"
+    },
+    {
+      "from": "hybrid_retriever",
+      "to": "reranker",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "reranker",
+      "to": "prompt_template",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "prompt_template",
+      "to": "llm",
+      "relation": "feeds_into"
+    },
+    {
+      "from": "rate_limiter",
+      "to": "llm",
+      "relation": "wraps"
+    },
+    {
+      "from": "dense_retriever",
+      "to": "rag_chain",
+      "relation": "assembled_into"
+    },
+    {
+      "from": "hybrid_retriever",
+      "to": "rag_chain",
+      "relation": "assembled_into"
+    },
+    {
+      "from": "reranker",
+      "to": "rag_chain",
+      "relation": "assembled_into"
+    },
+    {
+      "from": "prompt_template",
+      "to": "rag_chain",
+      "relation": "assembled_into"
+    },
+    {
+      "from": "llm",
+      "to": "rag_chain",
+      "relation": "assembled_into"
+    },
+    {
+      "from": "rag_chain",
+      "to": "eval_dataset",
+      "relation": "evaluated_against"
+    },
+    {
+      "from": "eval_dataset",
+      "to": "retrieval_metrics",
+      "relation": "measures"
+    },
+    {
+      "from": "eval_dataset",
+      "to": "generation_metrics",
+      "relation": "measures"
+    },
+    {
+      "from": "retrieval_metrics",
+      "to": "failure_taxonomy",
+      "relation": "informs"
+    },
+    {
+      "from": "generation_metrics",
+      "to": "failure_taxonomy",
+      "relation": "informs"
+    },
+    {
+      "from": "failure_taxonomy",
+      "to": "explainability_layer",
+      "relation": "informs"
+    },
+    {
+      "from": "rag_chain",
+      "to": "explainability_layer",
+      "relation": "exposed_by"
+    },
+    {
+      "from": "embedding_model",
+      "to": "embedding_finetune",
+      "relation": "optionally_replaced_by"
+    },
+    {
+      "from": "embedding_finetune",
+      "to": "vector_store",
+      "relation": "optionally_populates"
+    },
+    {
+      "from": "explainability_layer",
+      "to": "full_stack",
+      "relation": "prerequisite_for"
+    },
+    {
+      "from": "eval_dataset",
+      "to": "full_stack",
+      "relation": "prerequisite_for"
+    },
+    {
+      "from": "failure_taxonomy",
+      "to": "full_stack",
+      "relation": "prerequisite_for"
+    },
+    {
+      "from": "rag_chain",
+      "to": "full_stack",
+      "relation": "served_by"
+    }
   ],
   "decisions_log": [
     {
@@ -385,6 +540,71 @@
       "decision": "Post-implementation audit requires production-stack and evaluation revalidation before deployment",
       "rationale": "Audit on 2026-09-01 confirmed: (1) the reusable FinRAGPipeline defaults to the old non-table index and does not expose the evaluated top-20→5 reranker path; (2) the generation evaluator sets expected_refusal to false for every Phase 9 item because all 15 unanswerable items lack that field, and it computes keyword coverage without using it in correctness; (3) citation grounding checks independent metadata sets rather than exact document tuples; (4) the retrieval aggregation function is incomplete; (5) provider dependencies, environment configuration, and claimed Phase 9 summary artifacts have drifted; and (6) pytest collection is broken by an import-time CLI script. The existing benchmark files are retained as historical artifacts, but Phase 8/9 generation claims require rerun after remediation.",
       "date": "2026-09-01"
+    },
+    {
+      "decision": "2026-09-01 audit remediated",
+      "rationale": "Commits a1851b2 (production pipeline defaults to phase6_table_aware + hybrid/filter/rerank), 17811b6 (evaluation scoring + retrieval metrics), 8427ad9 (Phase 9 audit findings). phase9_eval_set.json now has expected_refusal on 17 items; pytest collects 45 tests.",
+      "date": "2026-09-06"
+    },
+    {
+      "decision": "Full-stack layer built ahead of the Phase 9 gate",
+      "rationale": "Streamlit frontend, FastAPI service, Postgres query logging, Docker, Prometheus + Loki/Grafana observability (commits 38de5cb..d46e550, 7164763).",
+      "date": "2026-09-07"
+    },
+    {
+      "decision": "Rebrand FIEND → FIEND",
+      "rationale": "README/LICENSE updated (409f10e); KG project name, phase3–7 summaries and web/app.py updated later. Python package remains finrag.",
+      "date": "2026-09-14"
+    },
+    {
+      "decision": "Post-Phase-9 generation fix iterations",
+      "rationale": "llama3.2 runs, 87 questions: ticker_backfill 47.1%, overrefusal_fix 47.1%, antistall_fix 50.6%, nobackfill_fix 37.9%, fy_fix 48.3% (2026-10-01); evalfix 71.3%, refusalphrase_fix 73.6%, refusalformat_fix 86.2% (2026-10-02). Code commits cf38533 (cross-company backfill leak, fiscal_year bypass), 42ddca5 (prompt encoding + direct Answer), 63d360b (citation grounding, section matching, refusal detection). The 10 fix-run result files are gitignored.",
+      "date": "2026-10-02"
+    },
+    {
+      "decision": "Dual-model Ollama switch: llama3.2 (fast) / qwen3:8b (accurate)",
+      "rationale": "qwen3:8b 92.0% acc at 12.2s vs llama3.2 86.2% at 5.8s; qwen3:4b rejected (43.7%, 31s). Trade-off: qwen3:8b refusal accuracy 67.8% vs 94.3%. Commit 21c4d19. SUPERSEDED 2026-10-08: the 92.0% was a scorer artifact; see 'Model balance re-measured'.",
+      "date": "2026-10-06"
+    },
+    {
+      "decision": "Reranker candidate pool fixed (true top-20→5)",
+      "rationale": "Since 8427ad9 (2026-09-06) the custom EnsembleRetriever truncated to k=5 by default and production filtered to 5 before reranking, so all Phase 9 / October generation numbers reranked ≤5 docs. Fixed in build_retrieval_pipeline and both eval harnesses. llama3.2 strict accuracy: 86.2% (≤5 candidates, old run) → 81.6% (20 candidates); the 9 lost items all retrieved the correct company and failed at generation (refusal/citation/grounding), so the drop is within plausible single-run variance and needs repeat runs to confirm.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Generation scorer: refusal never counts as a correct answer",
+      "rationale": "evaluate_generation.py counted a refusal on a supported question as correct when its explanation contained ≥50% of the expected keywords. qwen3:8b had 24 such cases (reported 92.0%, real 64.4%). Fixed; regression test TestRefusalNeverCorrectForSupported.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Model balance re-measured; qwen3 thinking disabled by default",
+      "rationale": "qwen3:8b's latency came from hidden thinking (single call 4.9s → 0.8s with reasoning off). Full eval with thinking off: 78.2% at 5.5s avg / 7.3s p90 vs thinking on 64.4% at 12.2s / 24.7s p90 — faster and more accurate. llama3.2 81.6% at 5.6s. Models agree on 60/87; oracle (best of both) 79/87. Simulated cascade llama→qwen escalating on failed format/citation-grounding checks or refusal: 87.4% at 7.3s avg (27 escalations). OLLAMA_REASONING env toggle added to OllamaProvider.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Architecture analysis: cascade vs single model vs LLM-judge on 8 GB GPU",
+      "rationale": "Retrieval is model-independent (~0.25s); the LLM only writes the answer from 5 chunks. Cascade (llama3.2 answers; deterministic format/citation-grounding/refusal checks; qwen3:8b re-answers on failure) simulated 87.4% strict with ~31% escalation, but on 8 GB VRAM each escalation adds ~12s of model swapping (swap in 5.0s + answer 3.0s + swap back 4.4s) → ~6.2s avg with ~15s spikes; token use ~2,550/query (+30%). An LLM-judge (qwen3:8b grading every llama3.2 answer) runs both models on every query (~4,000 tokens, +100%, swap every query) and is dominated by qwen3:8b answering alone. Sessions are stateless per query (no context growth); limits are the 4096 ctx window, Ollama keep_alive and single-GPU serialization. Decision: apply speed fixes first; after them llama3.2 = 85.1% strict, 1.3s avg / 2.3s p90, 6 over-refusals, qwen3:8b = 78.2% strict, 2.9s avg / 3.9s p90, 17 over-refusals. Cascade only worthwhile on ≥12 GB VRAM where both models stay resident; on 8 GB prefer a single model and fix qwen3:8b over-refusal via a model-specific prompt tuned on a held-out set.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Speed fixes verified; eval harness now uses production throttle policy",
+      "rationale": "eval/evaluate_generation.py built its own create_rate_limited_llm(rpm=config.llm.rpm) instead of get_rate_limited_llm(), so it kept the 6s throttle; now uses the shared function. Post-fix eval (rerank 20→5, max_tokens 768, no ollama throttle, thinking off): llama3.2 85.1% strict, 1.3s avg / 2.3s p90 (was 5.6s); qwen3:8b 78.2%, 2.9s avg / 3.9s p90 (was 5.5s). Results: eval/results/phase9_generation_speedfix_{llama3_2,qwen3_8b}.json.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Preload retrieval models once; BM25 from FAISS docstore; full-text chunk identity",
+      "rationale": "(1) RRF dedup key → (source_file, full page_content); explainability _chunk_id suffix → md5(source_file + full text)[:8] (unique per chunk, stable across processes for Postgres); duplicate _chunk_id in pipeline.py removed. Tests: TestChunkIdentity. Colliding chunks 3,338 → 664 (remaining are byte-identical chunks within one filing). Key cost 3.6µs/query. Eval effect within noise: llama3.2 85.1→82.8%, qwen3:8b 78.2→79.3%, numerical +1 each. (2) FinRAGPipeline keeps one BM25 (k=20) and one CrossEncoder, shared by the chain (build_retrieval_pipeline(bm25=, reranker=)) and query_explainable; dense scores use vector_store.embeddings; query_explainable/query_with_evidence generate from already-retrieved docs via self._generate (no second retrieval+rerank). Per-query query_explainable 18-23s → 1.3-6.4s (remainder is LLM). (3) load_production_pipeline builds BM25 from the FAISS docstore (load_documents_from_index) instead of re-parsing 30 filings: 70s → 18.7s (+~10s imports); ~0.8 GiB RSS after load. load_documents_for_bm25 and duplicate load_hybrid_pipeline/build_index/load_index removed. Caveat: after changing chunking the index must be rebuilt, or BM25 searches stale chunks. Note: tests/test_finrag.py::test_build_production_pipeline re-embeds the corpus and writes into data/vector_stores/phase6_table_aware — do not run it casually.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Frontend preloads pipeline at server start; UI restyled to samanyu.dev",
+      "rationale": "Streamlit's cache_resource only ran on the first session, so the first visitor waited ~30s; st.App lifespan warms it at startup instead. FastAPI already preloaded in its lifespan. Theme via config.toml first, CSS only for effects config cannot express.",
+      "date": "2026-10-08"
+    },
+    {
+      "decision": "Issue tracking split: ISSUES.txt (local, gitignored) + KG open_issues/test_status; README realigned with KG",
+      "rationale": "README had drifted: claimed EDGAR download and fiscal-year filtering, filter-before-hybrid ordering, UI→API REST calls, Postgres chat history, cli.py, 16,626-chunk index, gemini-2.0-flash, LLM_MAX_TOKENS=4096 and the obsolete 51.7% results; Quick Start's `run_pipeline.py build` would overwrite the production index. Rewritten to current verified state.",
+      "date": "2026-10-08"
     }
   ]
 }
