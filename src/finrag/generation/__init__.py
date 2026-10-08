@@ -191,6 +191,9 @@ class OllamaProvider(BaseLLMProvider):
             model=model_name,
             temperature=temperature,
             num_predict=max_tokens,
+            # qwen3 "thinks" silently by default (~6x latency, same answer on extraction
+            # tasks). Off unless OLLAMA_REASONING=true; non-thinking models ignore it.
+            reasoning=os.getenv("OLLAMA_REASONING", "false").lower() == "true",
         )
     
     def invoke(self, input: Any, config: Any = None) -> Any:
