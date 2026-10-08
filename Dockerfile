@@ -30,6 +30,7 @@ COPY --from=builder /install /usr/local
 # Copy application code
 COPY src/ ./src/
 COPY web/ ./web/
+COPY .streamlit/config.toml ./.streamlit/config.toml
 COPY data/ ./data/
 COPY .env.example .env.example
 

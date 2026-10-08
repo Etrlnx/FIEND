@@ -25,7 +25,7 @@ pdfplumber>=0.11.0
 pypdf>=4.0.0
 
 # Frontend
-streamlit>=1.30.0
+streamlit>=1.63.0  # st.App lifespan (web/serve.py) + theme options
 altair>=5.0.0
 
 # API & Persistence

@@ -45,4 +45,5 @@ test_loader.py
 tmp/
 
 # Streamlit
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml

@@ -1,0 +1,45 @@
+# Matches samanyu.dev: black ground, amber accent, Michroma, slate text, 4px corners.
+[theme]
+base = "dark"
+primaryColor = "#f59e0b"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#0b0f19"
+textColor = "#cbd5e1"
+linkColor = "#f59e0b"
+linkUnderline = false
+borderColor = "#1f2937"
+showWidgetBorder = true
+codeBackgroundColor = "#0b0f19"
+codeTextColor = "#f59e0b"
+
+font = "Michroma:https://fonts.googleapis.com/css2?family=Michroma&display=swap"
+headingFont = "Michroma:https://fonts.googleapis.com/css2?family=Michroma&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+# Michroma is wide and ships one weight; small sizes keep long answers readable (site uses .74-.92rem)
+baseFontSize = 13
+baseFontWeight = 400
+headingFontWeights = 400
+headingFontSizes = ["30px", "20px", "16px", "14px", "13px", "12px"]
+codeFontSize = "12px"
+
+baseRadius = "4px"
+buttonRadius = "4px"
+
+greenColor = "#4ade80"
+yellowColor = "#f59e0b"
+orangeColor = "#f59e0b"
+redColor = "#f87171"
+grayColor = "#64748b"
+# st.info boxes render as the site's neutral cards instead of blue
+blueColor = "#94a3b8"
+blueBackgroundColor = "#0b0f19"
+blueTextColor = "#cbd5e1"
+dataframeBorderColor = "#1f2937"
+dataframeHeaderBackgroundColor = "#0b0f19"
+chartCategoricalColors = ["#f59e0b", "#94a3b8", "#fbbf24", "#64748b", "#fcd34d", "#475569", "#cbd5e1"]
+
+[theme.sidebar]
+backgroundColor = "#04060c"
+secondaryBackgroundColor = "#0b0f19"
+textColor = "#cbd5e1"
+borderColor = "#1f2937"

@@ -1,4 +1,4 @@
-"""FinRAG Streamlit Frontend - Financial Intelligence & Evidence Trace."""
+"""FIEND Streamlit Frontend - Financial Intelligence and Evidence Nexus Decisioning."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ import pandas as pd
 import time
 from typing import Optional
 
-from finrag.pipeline import load_production_pipeline
 from finrag.explainability.models import ExplainableResult, VerificationStatus
+from resources import get_pipeline  # preloaded at server start by web/serve.py
 
 MODEL_OPTIONS = {
     "Fast — llama3.2 (3B)": "llama3.2",
@@ -35,44 +35,55 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS for better financial UI
-st.markdown("""
+# samanyu.dev look: colors and fonts come from .streamlit/config.toml; this only adds
+# what the theme can't express (white headings, amber hover glow, terminal inputs, tags).
+st.html("""
 <style>
-    .stApp { background-color: #f8f9fa; }
-    .main-header { 
-        background: linear-gradient(90deg, #1e3a5f 0%, #2c5282 100%);
-        color: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;
+    h1, h2, h3, h4 { color: #fff !important; letter-spacing: .04em; }
+    [data-testid="stCaptionContainer"] { color: #64748b; letter-spacing: .06em; }
+
+    /* Buttons: ghost by default, amber with glow on hover (site .btn-about-nav) */
+    [data-testid^="stBaseButton"] {
+        background: #ffffff05; border: 1px solid #ffffff1a; color: #fff;
+        letter-spacing: .06em; transition: all .25s;
     }
+    [data-testid^="stBaseButton"]:hover {
+        background: #f59e0b; border-color: #f59e0b; color: #000; box-shadow: 0 0 15px #f59e0b4d;
+    }
+    [data-testid="stBaseButton-primary"] { background: #f59e0b; border-color: #f59e0b; color: #000; }
+    [data-testid="stBaseButton-primary"]:hover { box-shadow: 0 0 20px #f59e0b59; }
+
+    /* Terminal-style input (site .form-terminal-input) */
+    [data-testid="stTextInput"] input::placeholder { color: #475569; }
+    [data-testid="stTextInput"] > div:focus-within { border-color: #f59e0b; box-shadow: 0 0 10px #f59e0b26; }
+
+    /* Cards (site .experience-card) */
+    [data-testid="stExpander"] details, [data-testid="stAlert"] {
+        background: #ffffff05; border: 1px solid #ffffff1a; transition: border-color .3s, box-shadow .3s;
+    }
+    [data-testid="stExpander"] details:hover { border-color: #f59e0b66; box-shadow: 0 15px 35px #f59e0b0a; }
+
+    /* Status tags (site .project-tag), semantic colors kept */
     .status-pill {
-        display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px;
-        font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem;
+        display: inline-block; padding: 4px 10px; border-radius: 2px; margin-right: .5rem;
+        font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; border: 1px solid;
     }
-    .pill-grounded { background-color: #d4edda; color: #155724; }
-    .pill-partial { background-color: #fff3cd; color: #856404; }
-    .pill-refusal { background-color: #f8d7da; color: #721c24; }
-    .pill-hallucinated { background-color: #f5c6cb; color: #721c24; }
-    .claim-card {
-        border: 1px solid #dee2e6; border-radius: 8px; padding: 1rem;
-        margin: 0.5rem 0; background: white;
-    }
+    .pill-grounded { color: #4ade80; background: #4ade800d; border-color: #4ade8033; }
+    .pill-partial { color: #f59e0b; background: #f59e0b0d; border-color: #f59e0b33; }
+    .pill-refusal, .pill-hallucinated { color: #f87171; background: #f871710d; border-color: #f8717133; }
     .citation-badge {
-        background: #e9ecef; border: 1px solid #ced4da;
-        border-radius: 4px; padding: 0.125rem 0.5rem;
-        font-family: monospace; font-size: 0.8rem; cursor: pointer;
+        color: #f59e0b; background: #f59e0b0d; border: 1px solid #f59e0b33; border-radius: 2px;
+        padding: 2px 8px; font-size: .7rem; cursor: pointer;
     }
-    .evidence-chunk { 
-        border-left: 3px solid #2c5282; padding: 0.75rem; 
-        background: #f8f9fa; margin: 0.5rem 0; font-size: 0.9rem;
+    .evidence-chunk {
+        border-left: 2px solid #f59e0b; padding: .75rem 1rem; margin: .5rem 0;
+        background: #ffffff05; color: #cbd5e1; font-size: .78rem; line-height: 1.8;
     }
-    .metric-card { background: white; border: 1px solid #dee2e6; border-radius: 8px; padding: 1rem; }
+    .evidence-chunk small { color: #94a3b8; }
+
+    html { scrollbar-color: #f59e0b66 transparent; scrollbar-width: thin; }
 </style>
-""", unsafe_allow_html=True)
-
-
-# Cache the pipeline loading
-@st.cache_resource(show_spinner="Loading FinRAG pipeline...")
-def get_pipeline():
-    return load_production_pipeline()
+""")
 
 
 # Preset example questions
@@ -93,12 +104,12 @@ PRESET_QUESTIONS = {
 def render_status_pill(status: str) -> str:
     """Render a color-coded status pill."""
     status_map = {
-        "VERIFIED": ("🟢 Grounded", "pill-grounded"),
-        "PARTIAL": ("🟡 Partial Evidence", "pill-partial"),
-        "UNGROUNDED": ("🔴 Unverified", "pill-refusal"),
-        "HALLUCINATED": ("🚫 Hallucinated", "pill-hallucinated"),
+        "VERIFIED": ("Grounded", "pill-grounded"),
+        "PARTIAL": ("Partial Evidence", "pill-partial"),
+        "UNGROUNDED": ("Unverified", "pill-refusal"),
+        "HALLUCINATED": ("Hallucinated", "pill-hallucinated"),
     }
-    label, cls = status_map.get(status, ("⚪ Unknown", ""))
+    label, cls = status_map.get(status, ("Unknown", ""))
     return f'<span class="status-pill {cls}">{label}</span>'
 
 
@@ -116,12 +127,8 @@ def render_citation_badge(citation: dict) -> str:
 
 def main():
     # Header
-    st.markdown("""
-    <div class="main-header">
-        <h1 style="margin: 0;">🏛️ FinRAG — Financial Intelligence & Evidence Trace</h1>
-        <p style="margin: 0.5rem 0 0; opacity: 0.9;">SEC EDGAR 10-K/10-Q Analysis with Grounded Citations & Retrieval Diagnostics</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.title("FIEND — Financial Intelligence and Evidence Nexus Decisioning")
+    st.caption("SEC EDGAR 10-K/10-Q Analysis with Grounded Citations & Retrieval Diagnostics")
 
     # Load pipeline
     try:
@@ -132,9 +139,9 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Controls")
+        st.header("Controls")
 
-        st.subheader("🧠 Model")
+        st.subheader("Model")
         model_label = st.selectbox(
             "Generation Model",
             list(MODEL_OPTIONS.keys()),
@@ -149,7 +156,7 @@ def main():
                     model_name=selected_model,
                 )
 
-        st.subheader("📊 Filing Filters")
+        st.subheader("Filing Filters")
         col1, col2 = st.columns(2)
         with col1:
             ticker_filter = st.selectbox(
@@ -160,7 +167,7 @@ def main():
         with col2:
             form_filter = st.selectbox("Filing Type", ["All", "10-K", "10-Q"], index=0)
 
-        st.subheader("🔧 Retrieval Settings")
+        st.subheader("Retrieval Settings")
         use_reranker = st.toggle("Cross-Encoder Reranker (top-20 → 5)", value=True)
         use_filtering = st.toggle("Metadata Filtering", value=True)
 
@@ -178,15 +185,15 @@ def main():
 
     with col_main:
         # Query input
-        st.subheader("💬 Query")
+        st.subheader("Query")
 
         # Preset buttons
         st.write("**Quick Examples:**")
-        preset_cols = st.columns(4)
         selected_preset = None
-        for i, (label, question) in enumerate(PRESET_QUESTIONS.items()):
-            with preset_cols[i % 4]:
-                if st.button(label, key=f"preset_{i}", use_container_width=True):
+        # Wrapping row: Michroma is wide, so fixed columns truncated the labels
+        with st.container(horizontal=True):
+            for i, (label, question) in enumerate(PRESET_QUESTIONS.items()):
+                if st.button(label, key=f"preset_{i}", width="content"):
                     selected_preset = question
 
         # Query input
@@ -198,7 +205,7 @@ def main():
             label_visibility="collapsed",
         )
 
-        run_button = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
+        run_button = st.button("Run Analysis", type="primary", width="stretch")
 
         # Process query
         if run_button and query:
@@ -218,7 +225,7 @@ def main():
 
                     # Display answer
                     st.divider()
-                    st.subheader("📝 Grounded Answer")
+                    st.subheader("Grounded Answer")
 
                     # Status indicator
                     if is_refusal:
@@ -243,17 +250,17 @@ def main():
                     st.markdown(answer)
 
                     # Latency
-                    st.caption(f"⏱️ Latency: {latency:.0f} ms · Model: {pipeline.cfg.llm.model_name}")
+                    st.caption(f"Latency: {latency:.0f} ms · Model: {pipeline.cfg.llm.model_name}")
 
                     # Explainable evidence trace
                     if show_explainable and result:
                         st.divider()
-                        st.subheader("🔍 Evidence & Audit Trace")
+                        st.subheader("Evidence & Audit Trace")
 
                         tab1, tab2, tab3 = st.tabs([
-                            "📄 Supporting Passages",
-                            "📊 Financial Tables",
-                            "📈 Retrieval Diagnostics"
+                            "Supporting Passages",
+                            "Financial Tables",
+                            "Retrieval Diagnostics"
                         ])
 
                         with tab1:
@@ -267,9 +274,9 @@ def main():
                                     if ct.matched_chunk_id:
                                         st.write(f"**Matched Chunk:** `{ct.matched_chunk_id}`")
                                     if ct.matched_tokens:
-                                        st.write(f"✅ **Verified:** {', '.join(ct.matched_tokens)}")
+                                        st.write(f"**Verified:** {', '.join(ct.matched_tokens)}")
                                     if ct.missing_tokens:
-                                        st.write(f"❌ **Missing:** {', '.join(ct.missing_tokens)}")
+                                        st.write(f"**Missing:** {', '.join(ct.missing_tokens)}")
 
                             st.write("**Top-5 Retrieved Evidence Chunks**")
                             for ec in result.evidence_chunks:
@@ -279,7 +286,7 @@ def main():
                                         f'<div class="evidence-chunk">'
                                         f'<strong>{meta.get("ticker", "")} • {meta.get("form", "")} • '
                                         f'{meta.get("filing_date", "")} • {meta.get("section", "")}</strong>'
-                                        f'{" 📊 Table" if ec.is_table else ""}<br>'
+                                        f'{" [Table]" if ec.is_table else ""}<br>'
                                         f'Rank: {ec.scores.final_rank} | '
                                         f'Dense: {ec.scores.dense_score:.3f}' if ec.scores.dense_score else 'Rank: N/A'
                                         f' | BM25: {ec.scores.bm25_rank}' if ec.scores.bm25_rank else ''
@@ -320,14 +327,14 @@ def main():
                                     "BM25 Rank": ec.scores.bm25_rank if ec.scores.bm25_rank else "N/A",
                                     "RRF Rank": ec.scores.rrf_rank if ec.scores.rrf_rank else "N/A",
                                     "Rerank Score": f"{ec.scores.rerank_score:.3f}" if ec.scores.rerank_score else "N/A",
-                                    "Is Table": "✅" if ec.is_table else "",
+                                    "Is Table": "Yes" if ec.is_table else "",
                                 })
                             if score_data:
                                 df = pd.DataFrame(score_data)
-                                st.dataframe(df, use_container_width=True, hide_index=True)
+                                st.dataframe(df, width="stretch", hide_index=True)
 
                             if result.ungrounded_citations:
-                                st.warning(f"⚠️ {len(result.ungrounded_citations)} ungrounded citation(s) detected")
+                                st.warning(f"{len(result.ungrounded_citations)} ungrounded citation(s) detected")
                                 for uc in result.ungrounded_citations:
                                     st.code(uc)
 
@@ -336,15 +343,15 @@ def main():
 
     # Sidebar info panel
     with col_sidebar_info:
-        st.subheader("📊 System Status")
+        st.subheader("System Status")
         st.success("Pipeline: **Loaded**")
-        st.info("Index: **phase6_table_aware** (16,626 chunks, 4,678 tables)")
+        st.info(f"Index: **phase6_table_aware** ({len(pipeline.documents):,} chunks)")
         st.info("Embeddings: **BAAI/bge-base-en-v1.5**")
         st.info("Reranker: **ms-marco-MiniLM-L-6-v2**")
         st.info(f"LLM: **Ollama {pipeline.cfg.llm.model_name}**")
 
         st.divider()
-        st.caption("FinRAG v0.1.0 | Built on LangChain + Streamlit")
+        st.caption("FIEND v0.1.0 | Built on LangChain + Streamlit")
 
 
 if __name__ == "__main__":
