@@ -33,7 +33,7 @@ class LLMConfig:
     model_name: str = "llama3.2"
     temperature: float = 0.1
     rpm: int = 10
-    max_tokens: int = 4096
+    max_tokens: int = 768
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
@@ -42,7 +42,7 @@ class LLMConfig:
             model_name=os.getenv("DEFAULT_LLM_MODEL", "gemini-2.5-flash"),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.1")),
             rpm=int(os.getenv("LLM_RPM", "10")),
-            max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
+            max_tokens=int(os.getenv("LLM_MAX_TOKENS", "768")),
         )
 
 

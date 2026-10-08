@@ -317,8 +317,7 @@ def run_generation(
     from finrag.generation import get_rate_limited_llm, get_llm
     from finrag.config import config
     
-    llm = get_llm()
-    rate_limited = create_rate_limited_llm(llm, rpm=config.llm.rpm)
+    rate_limited = get_rate_limited_llm()  # same throttle policy as production (none for ollama)
     prompt = prompt_template.partial(insufficient=INSUFFICIENT_EVIDENCE)
 
     retriever = build_retriever(store, chunks, use_reranker, True, fetch_k, final_k)

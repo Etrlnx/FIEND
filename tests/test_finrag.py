@@ -1,6 +1,7 @@
 """Unit tests for FIEND components."""
 
 import pytest
+from dataclasses import replace
 from finrag.retrieval.metadata_filter import (
     MetadataFilter,
     extract_metadata_filter,
@@ -326,3 +327,22 @@ class TestRefusalNeverCorrectForSupported:
         doc = Document(page_content="x", metadata={"ticker": "AAPL", "form": "10-K",
                                                    "filing_date": "2025-10-31", "section": "Item 7"})
         assert evaluate_generation_item(item, answer, [doc])["correct"] is False
+
+
+class TestLocalProviderNotThrottled:
+    """Local Ollama must not pay the cloud RPM throttle (60/rpm seconds between calls)."""
+
+    def test_ollama_skips_rpm_throttle(self, monkeypatch):
+        import time
+        import finrag.generation as g
+        from finrag.config import config
+
+        class Echo:
+            def invoke(self, input, config=None):
+                return input
+
+        monkeypatch.setattr(g, "get_llm", lambda cfg=None: Echo())
+        llm = g.get_rate_limited_llm(replace(config.llm, provider="ollama", rpm=1))
+        start = time.time()
+        llm.invoke("a"); llm.invoke("b")
+        assert time.time() - start < 1.0

@@ -194,6 +194,8 @@ class OllamaProvider(BaseLLMProvider):
             # qwen3 "thinks" silently by default (~6x latency, same answer on extraction
             # tasks). Off unless OLLAMA_REASONING=true; non-thinking models ignore it.
             reasoning=os.getenv("OLLAMA_REASONING", "false").lower() == "true",
+            # Ollama unloads idle models after 5m by default (~2.5s reload on next query).
+            keep_alive=os.getenv("OLLAMA_KEEP_ALIVE", "30m"),
         )
     
     def invoke(self, input: Any, config: Any = None) -> Any:
@@ -234,13 +236,14 @@ def is_rate_limit_error(e: Exception) -> bool:
     return any(kw in error_str for kw in ["429", "rate limit", "quota", "resource_exhausted", "too many requests"])
 
 
-def create_rate_limited_llm(provider: BaseLLMProvider, rpm: int = 10) -> RunnableLambda:
+def create_rate_limited_llm(provider: BaseLLMProvider, rpm: int | None = 10) -> RunnableLambda:
     """
     Create a rate-limited LLM with exponential backoff retry for quota errors.
-    
-    Respects RPM limit locally, and retries with exponential backoff on 429 errors.
+
+    Respects RPM limit locally (rpm=None disables the throttle), and retries
+    with exponential backoff on 429 errors.
     """
-    min_interval = 60.0 / rpm
+    min_interval = 60.0 / rpm if rpm else 0.0
     last_called = [0.0]
 
     @retry(
@@ -278,4 +281,5 @@ def get_rate_limited_llm(cfg: LLMConfig | None = None) -> RunnableLambda:
     """Get LLM with rate limiting as a Runnable."""
     cfg = cfg or config.llm
     provider = get_llm(cfg)
-    return create_rate_limited_llm(provider, rpm=cfg.rpm)
+    # Local Ollama has no quota; the RPM throttle only added up to 60/rpm s per call.
+    return create_rate_limited_llm(provider, rpm=None if cfg.provider == "ollama" else cfg.rpm)
