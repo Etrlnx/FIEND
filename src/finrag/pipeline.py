@@ -19,6 +19,7 @@ from finrag.generation import (
 )
 from finrag.retrieval import build_retrieval_pipeline
 from finrag.explainability import (
+    _chunk_id,
     build_explainable_result,
     extract_dense_scores,
     extract_bm25_scores,
@@ -204,11 +205,6 @@ class FinRAGPipeline:
             rrf_ranks=rrf_ranks,
             rerank_scores=rerank_scores,
         )
-
-
-def _chunk_id(doc: Document) -> str:
-    meta = doc.metadata
-    return f"{meta.get('ticker','')}_{meta.get('form','')}_{meta.get('filing_date','')}_{meta.get('section','').strip().rstrip('.')}_{hash(doc.page_content[:100])%10000:04d}"
 
 
 def build_production_pipeline() -> FinRAGPipeline:

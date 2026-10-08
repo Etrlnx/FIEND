@@ -1,7 +1,8 @@
-"""Explainability module for FinRAG - claim attribution, evidence tracing, and diagnostics."""
+"""Explainability module for FIEND - claim attribution, evidence tracing, and diagnostics."""
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import List, Dict, Any, Optional, Tuple, Set
 from dataclasses import dataclass
@@ -27,7 +28,10 @@ def _normalize_section(section: str) -> str:
 
 def _chunk_id(doc: Document) -> str:
     meta = doc.metadata
-    return f"{meta.get('ticker','')}_{meta.get('form','')}_{meta.get('filing_date','')}_{_normalize_section(meta.get('section',''))}_{hash(doc.page_content[:100])%10000:04d}"
+    # md5 of filing + full text: unique per chunk (table chunks share a header prefix)
+    # and stable across processes, unlike hash(), so ids logged to Postgres stay valid.
+    digest = hashlib.md5(f"{meta.get('source_file','')}\0{doc.page_content}".encode()).hexdigest()[:8]
+    return f"{meta.get('ticker','')}_{meta.get('form','')}_{meta.get('filing_date','')}_{_normalize_section(meta.get('section',''))}_{digest}"
 
 
 def extract_dense_scores(docs: List[Document], query: str, embeddings, vector_store) -> Dict[str, float]:

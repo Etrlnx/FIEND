@@ -346,3 +346,32 @@ class TestLocalProviderNotThrottled:
         start = time.time()
         llm.invoke("a"); llm.invoke("b")
         assert time.time() - start < 1.0
+
+
+class TestChunkIdentity:
+    """Chunks of one table share a long header; they must stay distinct through RRF and in chunk ids."""
+
+    HEADER = "TABLE from Apple Inc. (AAPL) 10-Q filed 2026-07-31\nSection: Item 1. Financial Statements\nTable: (In millions)\n"
+    META = {"ticker": "AAPL", "form": "10-Q", "filing_date": "2026-07-31", "section": "Item 1", "source_file": "aapl.htm"}
+
+    def _docs(self):
+        return [Document(page_content=self.HEADER + "| Net sales | 94,036 |", metadata=dict(self.META)),
+                Document(page_content=self.HEADER + "| Net income | 23,434 |", metadata=dict(self.META))]
+
+    def test_rrf_keeps_both_table_chunks(self):
+        from langchain_core.retrievers import BaseRetriever
+        from finrag.retrieval import EnsembleRetriever
+        docs = self._docs()
+
+        class Fixed(BaseRetriever):
+            def _get_relevant_documents(self, query, **kw):
+                return docs
+
+        out = EnsembleRetriever(retrievers=[Fixed(), Fixed()], weights=[0.5, 0.5], k=5).invoke("net income")
+        assert len(out) == 2
+
+    def test_chunk_id_unique_and_stable(self):
+        from finrag.explainability import _chunk_id
+        a, b = self._docs()
+        assert _chunk_id(a) != _chunk_id(b)
+        assert _chunk_id(a) == _chunk_id(Document(page_content=a.page_content, metadata=dict(self.META)))

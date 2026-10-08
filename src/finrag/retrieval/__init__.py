@@ -40,13 +40,15 @@ class EnsembleRetriever(BaseRetriever):
                 all_results.append((i, []))
         
         # RRF scoring
-        scores: Dict[str, float] = defaultdict(float)
-        doc_map: Dict[str, Document] = {}
+        scores: Dict[tuple, float] = defaultdict(float)
+        doc_map: Dict[tuple, Document] = {}
         
         for retriever_idx, docs in all_results:
             weight = self.weights[retriever_idx] if retriever_idx < len(self.weights) else 1.0
             for rank, doc in enumerate(docs):
-                doc_id = f"{doc.metadata.get('ticker', '')}_{doc.metadata.get('section', '')}_{hash(doc.page_content[:100])}"
+                # Full text + filing: table chunks repeat their header, so a prefix key
+                # merged different rows; identical boilerplate recurs across 10-K/10-Q.
+                doc_id = (doc.metadata.get("source_file"), doc.page_content)
                 scores[doc_id] += weight / (self.rrf_k + rank + 1)
                 if doc_id not in doc_map:
                     doc_map[doc_id] = doc
