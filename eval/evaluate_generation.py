@@ -269,7 +269,12 @@ def evaluate_generation_item(
     if expected_refusal:
         answer_correct = is_refusal_answer
     else:
-        answer_correct = keyword_coverage(answer, expected_keywords) >= 0.5  # At least 50% keyword coverage
+        # A refusal is never a correct answer to a supported question, even if its
+        # explanation happens to mention the expected keywords.
+        answer_correct = (
+            not is_refusal_answer
+            and keyword_coverage(answer, expected_keywords) >= 0.5  # At least 50% keyword coverage
+        )
 
     result["correct"] = (
         answer_correct

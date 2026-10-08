@@ -311,3 +311,18 @@ class TestRerankCandidatePool:
         out = retriever.invoke("What was Apple revenue in the 10-K?")
         assert seen["n"] == 20
         assert len(out) == 5
+
+
+class TestRefusalNeverCorrectForSupported:
+    """A refusal whose explanation mentions the expected keywords must not score as correct."""
+
+    def test_over_refusal_scored_wrong(self):
+        from eval.evaluate_generation import evaluate_generation_item
+        item = {"id": "t", "question": "q", "category": "factual", "expected_refusal": False,
+                "expected_answer_contains": ["iPhone", "Mac", "Services"]}
+        answer = ("Answer: Insufficient evidence to answer this question. Evidence mentions iPhone, Mac "
+                  "and Services but not the full list [AAPL, 10-K, 2025-10-31, Item 7].\n\n"
+                  "Evidence:\n- [AAPL, 10-K, 2025-10-31, Item 7]")
+        doc = Document(page_content="x", metadata={"ticker": "AAPL", "form": "10-K",
+                                                   "filing_date": "2025-10-31", "section": "Item 7"})
+        assert evaluate_generation_item(item, answer, [doc])["correct"] is False
